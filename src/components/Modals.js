@@ -2,6 +2,8 @@
 
 import { getDecks, saveDecks, getDeckById, getDeckColor } from '../engine/decks.js';
 import { getClasses, saveClasses } from '../engine/classes.js';
+import { getMem, getRec, isMastered, isWeak } from '../engine/memory.js';
+import { getBestHS } from '../engine/quiz.js';
 import { DECK_COLORS } from '../config.js';
 import { supaSaveDeck } from '../engine/storage.js';
 
@@ -24,39 +26,65 @@ function makeModal(id) {
 }
 
 // ── Deck dropdown menu ──
+// The menu is appended to document.body so it is never inside a CSS-transformed
+// parent (deck cards use transform:translateY on hover, which breaks position:fixed).
 export function toggleDeckMenu(e, deckId) {
-  document.querySelectorAll('.deck-dropdown.open').forEach(m => {
-    if (m.id !== 'ddm-' + deckId) m.classList.remove('open');
-  });
-  const menu = document.getElementById('ddm-' + deckId);
-  if (!menu) return;
-  const isOpen = menu.classList.contains('open');
-  document.querySelectorAll('.deck-dropdown.open').forEach(m => {
-    m.classList.remove('open');
-    const info = m.querySelector('.dd-info');
-    if (info) info.classList.remove('open');
-  });
-  if (!isOpen) {
-    const vw = window.innerWidth, vh = window.innerHeight;
-    const mw = 210, mh = 180;
-    let x = e.clientX, y = e.clientY;
-    if (x + mw > vw) x = vw - mw - 10;
-    if (y + mh > vh) y = vh - mh - 10;
-    menu.style.left = x + 'px';
-    menu.style.top = y + 'px';
-    menu.classList.add('open');
-
-    const renameBtn = menu.querySelector('[data-action="rename"]');
-    const assignBtn = menu.querySelector('[data-action="assign"]');
-    const infoBtn = menu.querySelector('[data-action="info"]');
-    const deleteBtn = menu.querySelector('[data-action="delete"]');
-
-    if (renameBtn) renameBtn.onclick = () => renameDeck(deckId);
-    if (assignBtn) assignBtn.onclick = () => openAssignClassModal(deckId);
-    if (infoBtn) infoBtn.onclick = () => toggleDeckInfo(deckId);
-    if (deleteBtn) deleteBtn.onclick = () => _deleteDeck?.(deckId);
-  }
   e.stopPropagation();
+
+  // Close any open context menu; if it was already this deck, treat as toggle-off
+  const existing = document.getElementById('deck-ctx-menu');
+  if (existing) {
+    const wasSame = existing.dataset.deckId === String(deckId);
+    existing.remove();
+    if (wasSame) return;
+  }
+
+  const deck = getDeckById(deckId);
+  if (!deck) return;
+
+  // Build info panel data
+  const mem = getMem();
+  const masteredN = deck.questions.filter(q => isMastered(getRec(mem, q.id))).length;
+  const weakN = deck.questions.filter(q => isWeak(getRec(mem, q.id))).length;
+  const createdStr = deck.created ? new Date(deck.created).toLocaleDateString() : 'Unknown';
+  const bestTC = getBestHS(deck.id);
+  const bestTCStr = bestTC ? bestTC.correct + ' correct / ' + bestTC.secs + 's' : '—';
+
+  const menu = document.createElement('div');
+  menu.id = 'deck-ctx-menu';
+  menu.className = 'deck-dropdown open';
+  menu.dataset.deckId = String(deckId);
+  menu.innerHTML = `
+    <button class="dd-item" data-action="rename"><span class="dd-icon">✏️</span>Rename</button>
+    <button class="dd-item" data-action="assign"><span class="dd-icon">🎓</span>Assign to Class</button>
+    <button class="dd-item" data-action="info"><span class="dd-icon">ℹ️</span>Info</button>
+    <div class="dd-divider"></div>
+    <div class="dd-info" id="ddi-${deckId}">
+      <div class="dd-info-row"><span class="ddk">Questions</span><span class="ddv">${deck.questions.length}</span></div>
+      <div class="dd-info-row"><span class="ddk">Created</span><span class="ddv">${createdStr}</span></div>
+      <div class="dd-info-row"><span class="ddk">Mastered</span><span class="ddv">${masteredN}/${deck.questions.length}</span></div>
+      <div class="dd-info-row"><span class="ddk">Weak</span><span class="ddv">${weakN}</span></div>
+      <div class="dd-info-row"><span class="ddk">Best TC</span><span class="ddv">${bestTCStr}</span></div>
+    </div>
+    <div class="dd-divider"></div>
+    <button class="dd-item" data-action="delete" style="color:var(--accent)"><span class="dd-icon">🗑️</span>Delete Deck</button>
+  `;
+
+  // Position at cursor, keeping within viewport
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const mw = 210, mh = 200;
+  let x = e.clientX, y = e.clientY;
+  if (x + mw > vw) x = vw - mw - 10;
+  if (y + mh > vh) y = vh - mh - 10;
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+
+  document.body.appendChild(menu);
+
+  menu.querySelector('[data-action="rename"]').onclick = (ev) => { ev.stopPropagation(); renameDeck(deckId); };
+  menu.querySelector('[data-action="assign"]').onclick = (ev) => { ev.stopPropagation(); openAssignClassModal(deckId); };
+  menu.querySelector('[data-action="info"]').onclick = (ev) => { ev.stopPropagation(); toggleDeckInfo(deckId); };
+  menu.querySelector('[data-action="delete"]').onclick = (ev) => { ev.stopPropagation(); _deleteDeck?.(deckId); };
 }
 
 export function toggleDeckInfo(deckId) {

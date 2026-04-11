@@ -136,8 +136,9 @@ function initKeyboard() {
 // ── Close dropdown menus on outside click ──
 function initClickOutside() {
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('.deck-ellipsis') && !e.target.closest('.deck-dropdown')) {
-      document.querySelectorAll('.deck-dropdown.open').forEach(m => m.classList.remove('open'));
+    if (!e.target.closest('#deck-ctx-menu') && !e.target.closest('.deck-ellipsis')) {
+      const menu = document.getElementById('deck-ctx-menu');
+      if (menu) menu.remove();
     }
   });
 }

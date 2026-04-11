@@ -44,21 +44,6 @@ export function makeDeckCard(deck, overrideCls) {
       <button class="btn btn-primary btn-sm" data-action="quiz">▶ Quiz</button>
       <button class="btn btn-ghost btn-sm" data-action="drill">🎯 Drill</button>
     </div>
-    <div class="deck-dropdown" id="ddm-${deck.id}">
-      <button class="dd-item" data-action="rename"><span class="dd-icon">✏️</span>Rename</button>
-      <button class="dd-item" data-action="assign"><span class="dd-icon">🎓</span>Assign to Class</button>
-      <button class="dd-item" data-action="info"><span class="dd-icon">ℹ️</span>Info</button>
-      <div class="dd-divider"></div>
-      <div class="dd-info" id="ddi-${deck.id}">
-        <div class="dd-info-row"><span class="ddk">Questions</span><span class="ddv">${deck.questions.length}</span></div>
-        <div class="dd-info-row"><span class="ddk">Created</span><span class="ddv">${createdStr}</span></div>
-        <div class="dd-info-row"><span class="ddk">Mastered</span><span class="ddv">${masteredN}/${deck.questions.length}</span></div>
-        <div class="dd-info-row"><span class="ddk">Weak</span><span class="ddv">${weakN}</span></div>
-        <div class="dd-info-row"><span class="ddk">Best TC</span><span class="ddv">${bestTCStr}</span></div>
-      </div>
-      <div class="dd-divider"></div>
-      <button class="dd-item" data-action="delete" style="color:var(--accent)"><span class="dd-icon">🗑️</span>Delete Deck</button>
-    </div>
   `;
 
   card.querySelector('[data-action="quiz"]').onclick = () => _quickStartDeck?.(deck.id);
