@@ -1,0 +1,22 @@
+{
+  "name": "studyblitz",
+  "version": "1.0.0",
+  "description": "StudyBlitz — Adaptive Exam Engine. Vite + vanilla JS ESM.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "vite-plugin-pwa": "^0.20.0",
+    "vitest": "^2.0.0"
+  }
+}

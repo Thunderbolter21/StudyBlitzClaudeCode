@@ -1,0 +1,28 @@
+/* exam.css — exam mode screen, questions, grading, footer */
+
+#exam-screen{background:var(--bg);position:fixed;inset:0;z-index:200;display:none;overflow-y:auto;}
+#exam-screen.open{display:block;}
+#exam-inner{max-width:800px;margin:0 auto;padding:2rem 1.5rem 6rem;}
+.exam-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2rem;padding-bottom:1.2rem;border-bottom:1px solid var(--border);}
+.exam-title{font-family:"Bebas Neue",sans-serif;font-size:2.2rem;letter-spacing:0.06em;}
+.exam-sub{font-size:0.8rem;color:var(--muted);margin-top:0.2rem;}
+.exam-q{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:1.2rem;transition:border-color 0.3s;}
+.exam-q.graded-correct{border-color:var(--green);box-shadow:0 0 0 1px var(--green);}
+.exam-q.graded-wrong{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+.exam-q-num{font-size:0.68rem;text-transform:uppercase;letter-spacing:0.18em;color:var(--muted);margin-bottom:0.5rem;}
+.exam-q-text{font-size:1rem;font-weight:500;line-height:1.65;margin-bottom:1rem;}
+.exam-opts{display:flex;flex-direction:column;gap:0.45rem;}
+.exam-opt{display:flex;align-items:center;gap:0.75rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.7rem 1rem;cursor:pointer;transition:border-color 0.15s;}
+.exam-opt:hover{border-color:var(--accent);}
+.exam-opt input[type=radio]{accent-color:var(--accent);width:16px;height:16px;flex-shrink:0;}
+.exam-opt-key{font-family:"Bebas Neue",sans-serif;font-size:0.9rem;min-width:22px;color:var(--muted);}
+.exam-opt-txt{font-size:0.9rem;line-height:1.4;}
+.exam-opt.opt-correct{border-color:var(--green);background:rgba(0,229,160,0.08);}
+.exam-opt.opt-correct .exam-opt-key{color:var(--green);}
+.exam-opt.opt-wrong{border-color:var(--accent);background:rgba(255,63,108,0.08);}
+.exam-opt.opt-wrong .exam-opt-key{color:var(--accent);}
+.exam-opt.opt-missed{border-color:var(--green);background:rgba(0,229,160,0.05);}
+.exam-explain{font-size:0.8rem;color:var(--muted);margin-top:0.8rem;padding-top:0.8rem;border-top:1px solid var(--border);line-height:1.6;display:none;}
+.exam-q.graded-correct .exam-explain,.exam-q.graded-wrong .exam-explain{display:block;}
+.exam-footer{position:fixed;bottom:0;left:0;right:0;background:var(--bg);border-top:1px solid var(--border);padding:1rem 1.5rem;display:flex;align-items:center;justify-content:flex-end;gap:1rem;z-index:201;}
+.exam-warn{font-size:0.82rem;color:var(--accent);flex:1;}

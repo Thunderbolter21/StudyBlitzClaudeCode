@@ -1,0 +1,32 @@
+/* classes.css — classes page cards, drill options, weak spots */
+
+.class-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:1rem;overflow:hidden;}
+.class-card-header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.2rem;cursor:pointer;transition:background 0.15s;user-select:none;}
+.class-card-header:hover{background:rgba(255,255,255,0.03);}
+.class-card-header.open{border-bottom:1px solid var(--border);}
+.class-left{display:flex;align-items:center;gap:0.9rem;}
+.class-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+.class-name{font-weight:600;font-size:1rem;}
+.class-deck-count{font-size:0.75rem;color:var(--muted);}
+.class-right{display:flex;align-items:center;gap:0.6rem;}
+.class-chevron{font-size:0.72rem;color:var(--muted);transition:transform 0.2s;}
+.class-card-header.open .class-chevron{transform:rotate(180deg);}
+.class-body{display:none;padding:0.8rem 1.2rem 1rem;}
+.class-deck-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.9rem;margin-top:0.6rem;padding:0.4rem 0 0.2rem;}
+.class-body.open{display:block;}
+.class-action{display:flex;align-items:center;gap:0.7rem;padding:0.6rem 0.8rem;border-radius:10px;border:1px solid var(--border);background:var(--surface);margin-bottom:0.6rem;cursor:pointer;transition:all 0.15s;font-size:0.85rem;color:var(--text);font-family:'Sora',sans-serif;width:100%;text-align:left;}
+.class-action:hover{border-color:rgba(255,255,255,0.2);background:rgba(255,255,255,0.04);}
+.class-action .ca-icon{font-size:1rem;width:20px;text-align:center;flex-shrink:0;}
+.class-action-sub{padding:0.4rem 0 0.4rem 1.5rem;display:none;}
+.class-action-sub.open{display:block;}
+.class-sub-item{display:flex;align-items:center;gap:0.6rem;padding:0.5rem 0.8rem;border-radius:8px;cursor:pointer;font-size:0.83rem;color:var(--muted);transition:all 0.15s;border:none;background:transparent;width:100%;text-align:left;font-family:'Sora',sans-serif;}
+.class-sub-item:hover{color:var(--text);background:rgba(255,255,255,0.04);}
+.class-sub-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.class-drill-opts{padding:0.4rem 0 0 1.5rem;display:none;gap:0.5rem;flex-wrap:wrap;}
+.class-drill-opts.open{display:flex;}
+.no-classes{text-align:center;padding:3rem 2rem;color:var(--muted);}
+.no-classes .nc-icon{font-size:3rem;margin-bottom:1rem;}
+
+/* ── WEAK SPOTS page ── */
+.weak-q-row{display:flex;align-items:flex-start;gap:0.8rem;padding:0.75rem 1.2rem;border-bottom:1px solid var(--border);}
+.weak-q-row:last-child{border-bottom:none;}
