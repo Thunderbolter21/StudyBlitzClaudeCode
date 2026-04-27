@@ -384,13 +384,14 @@ export function renderFileList() {
       : (file.size / (1024 * 1024)).toFixed(1) + ' MB';
     const icon = file.type === 'application/pdf' ? '\uD83D\uDCC4' : '\uD83D\uDDBC\uFE0F';
 
+    const needsCompress = file.type.startsWith('image/') && file.size > 5 * 1024 * 1024;
     const item = document.createElement('div');
     item.style.cssText = 'display:flex;align-items:center;gap:0.6rem;padding:0.5rem 0.7rem;background:rgba(255,255,255,0.03);border-radius:var(--radius);';
     item.innerHTML = `
       <span style="font-size:1.1rem;">${icon}</span>
       <div style="flex:1;min-width:0;">
         <div style="font-size:0.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${file.name}</div>
-        <div style="font-size:0.68rem;color:var(--muted);">${sizeStr}</div>
+        <div style="font-size:0.68rem;color:var(--muted);">${sizeStr}${needsCompress ? ' &nbsp;<span style="color:#ffc94a;font-size:0.65rem;">&#9889; will compress</span>' : ''}</div>
       </div>
       <button class="btn btn-ghost btn-sm file-remove-btn" style="padding:0.2rem 0.5rem;font-size:0.75rem;">\u2715</button>
     `;
@@ -462,64 +463,157 @@ export function updateKeyBadge() {
 
 /* ══════════════════════════════════════════════════════════════
    IMAGE COMPRESSION
-   Guarantees output is under Anthropic's hard 5 MB per-image limit.
-   Strategy: scale down large dimensions first, then sweep quality.
-   ══════════════════════════════════════════════════════════ */
+   Guarantees output is under Anthropic’s 5 MB per-image limit.
+   Fully async with requestAnimationFrame yields so the browser
+   repaints between attempts — enabling the live compression modal.
+   ════════════════════════════════════════════════════════ */
 
-async function compressImage(dataUrl, mediaType) {
-  const API_MAX = 4.75 * 1024 * 1024; // 4.75 MB — safely under the 5 MB API limit
-  const MAX_DIM  = 2048;               // cap longest edge for study-note readability
+async function compressImage(dataUrl, mediaType, onProgress) {
+  const API_MAX = 4.75 * 1024 * 1024;
+  const MAX_DIM  = 2048;
 
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onerror = () => resolve({ data: dataUrl.split(',')[1], media_type: 'image/jpeg' });
-    img.onload = () => {
-      // Step 1 — scale down to MAX_DIM if needed (preserves aspect ratio)
-      let w = img.naturalWidth;
-      let h = img.naturalHeight;
-      if (w > MAX_DIM || h > MAX_DIM) {
-        const scale = MAX_DIM / Math.max(w, h);
-        w = Math.max(1, Math.floor(w * scale));
-        h = Math.max(1, Math.floor(h * scale));
-      }
+  const img = await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = rej;
+    i.src = dataUrl;
+  }).catch(() => null);
 
-      const canvas = document.createElement('canvas');
-      const ctx    = canvas.getContext('2d');
+  if (!img) return { data: dataUrl.split(',')[1], media_type: 'image/jpeg' };
 
-      // Step 2 — quality sweep, then dimension reduction if still too big
-      let quality = 0.85;
-      for (let attempt = 0; attempt < 12; attempt++) {
-        canvas.width  = w;
-        canvas.height = h;
-        ctx.clearRect(0, 0, w, h);
-        ctx.drawImage(img, 0, 0, w, h);
+  let w = img.naturalWidth;
+  let h = img.naturalHeight;
+  if (w > MAX_DIM || h > MAX_DIM) {
+    const scale = MAX_DIM / Math.max(w, h);
+    w = Math.max(1, Math.floor(w * scale));
+    h = Math.max(1, Math.floor(h * scale));
+  }
 
-        const dataUrlOut = canvas.toDataURL('image/jpeg', quality);
-        const b64        = dataUrlOut.split(',')[1];
-        const bytes      = Math.ceil(b64.length * 3 / 4);
+  const canvas = document.createElement('canvas');
+  const ctx    = canvas.getContext('2d');
+  let quality  = 0.85;
 
-        if (bytes <= API_MAX) { resolve({ data: b64, media_type: 'image/jpeg' }); return; }
+  for (let attempt = 0; attempt < 12; attempt++) {
+    await new Promise(r => requestAnimationFrame(r)); // yield so modal can repaint
 
-        if (quality > 0.35) {
-          // First priority: lower quality
-          quality = Math.max(0.35, quality - 0.15);
-        } else {
-          // Quality floor hit — shrink dimensions by the exact ratio needed
-          const shrink = Math.sqrt(API_MAX / bytes) * 0.95; // 5 % safety margin
-          w = Math.max(1, Math.floor(w * shrink));
-          h = Math.max(1, Math.floor(h * shrink));
-          quality = 0.55; // reset quality after resize
-        }
-      }
+    canvas.width  = w;
+    canvas.height = h;
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
 
-      // Absolute fallback — should never be reached in practice
-      canvas.width = w; canvas.height = h;
-      ctx.drawImage(img, 0, 0, w, h);
-      resolve({ data: canvas.toDataURL('image/jpeg', 0.3).split(',')[1], media_type: 'image/jpeg' });
-    };
-    img.src = dataUrl;
-  });
+    const out   = canvas.toDataURL('image/jpeg', quality);
+    const b64   = out.split(',')[1];
+    const bytes = Math.ceil(b64.length * 3 / 4);
+
+    if (onProgress) onProgress({ attempt, quality, w, h, bytes, done: bytes <= API_MAX, previewUrl: out });
+    if (bytes <= API_MAX) return { data: b64, media_type: 'image/jpeg' };
+
+    if (quality > 0.35) {
+      quality = Math.max(0.35, quality - 0.15);
+    } else {
+      const shrink = Math.sqrt(API_MAX / bytes) * 0.95;
+      w = Math.max(1, Math.floor(w * shrink));
+      h = Math.max(1, Math.floor(h * shrink));
+      quality = 0.55;
+    }
+  }
+
+  // Absolute fallback
+  await new Promise(r => requestAnimationFrame(r));
+  canvas.width = w; canvas.height = h;
+  ctx.drawImage(img, 0, 0, w, h);
+  const fbOut = canvas.toDataURL('image/jpeg', 0.3);
+  const fbB64 = fbOut.split(',')[1];
+  if (onProgress) onProgress({ attempt: 12, quality: 0.3, w, h, bytes: Math.ceil(fbB64.length * 3 / 4), done: true, previewUrl: fbOut });
+  return { data: fbB64, media_type: 'image/jpeg' };
 }
+
+/* ══════════════════════════════════════════════════════════════
+   COMPRESSION LIVE-VIEW MODAL
+   Real-time canvas preview + stats while images are compressed.
+   ════════════════════════════════════════════════════════ */
+
+function openCompressionModal() {
+  let modal = document.getElementById('sb-compress-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'sb-compress-modal';
+    modal.className = 'modal-overlay';
+    modal.style.zIndex = '9999';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:500px;text-align:center;">
+      <div style="font-size:1.1rem;font-weight:800;letter-spacing:0.03em;margin-bottom:0.15rem;">⚙️ Compressing Image</div>
+      <div id="sbcm-filename" style="font-size:0.75rem;color:var(--muted);margin-bottom:1rem;min-height:1em;"></div>
+      <div style="display:flex;gap:1rem;align-items:flex-start;margin-bottom:1rem;">
+        <div style="flex:1.2;background:#0d0d18;border-radius:8px;overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.07);">
+          <img id="sbcm-preview" style="max-width:100%;max-height:100%;object-fit:contain;display:block;" alt="preview" />
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:0.55rem;font-size:0.78rem;text-align:left;">
+          <div>
+            <div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:0.1rem;">Original</div>
+            <div id="sbcm-original" style="font-weight:700;color:var(--accent);">-</div>
+          </div>
+          <div>
+            <div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:0.1rem;">Current size</div>
+            <div id="sbcm-current" style="font-weight:700;">-</div>
+          </div>
+          <div>
+            <div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:0.1rem;">Target</div>
+            <div style="font-weight:700;color:var(--green);">&lt; 4.75 MB</div>
+          </div>
+          <div>
+            <div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:0.1rem;">Quality</div>
+            <div id="sbcm-quality" style="font-weight:700;">-</div>
+          </div>
+          <div>
+            <div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:0.1rem;">Dimensions</div>
+            <div id="sbcm-dims" style="font-weight:700;">-</div>
+          </div>
+        </div>
+      </div>
+      <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:0.6rem 0.8rem;margin-bottom:0.7rem;text-align:left;">
+        <div id="sbcm-status" style="font-size:0.77rem;color:var(--muted);margin-bottom:0.45rem;">Initialising…</div>
+        <div style="background:rgba(255,255,255,0.08);border-radius:4px;height:5px;overflow:hidden;">
+          <div id="sbcm-bar" style="height:100%;width:0%;border-radius:4px;transition:width 0.18s,background 0.3s;background:linear-gradient(90deg,var(--blue),var(--gold));"></div>
+        </div>
+      </div>
+      <div id="sbcm-file-prog" style="font-size:0.7rem;color:var(--muted);"></div>
+    </div>`;
+  modal.style.display = 'flex';
+}
+
+function updateCompressionModal(filename, originalBytes, prog, fileIdx, totalImages) {
+  const fmt = b => b >= 1024 * 1024 ? (b / 1024 / 1024).toFixed(2) + ' MB' : (b / 1024).toFixed(0) + ' KB';
+  const g   = id => document.getElementById(id);
+  if (g('sbcm-filename')) g('sbcm-filename').textContent = filename;
+  if (g('sbcm-original')) g('sbcm-original').textContent = fmt(originalBytes);
+  if (g('sbcm-current'))  {
+    g('sbcm-current').textContent  = fmt(prog.bytes);
+    g('sbcm-current').style.color  = prog.done ? 'var(--green)' : (prog.bytes <= 4.75 * 1024 * 1024 ? 'var(--green)' : 'var(--gold)');
+  }
+  if (g('sbcm-quality'))  g('sbcm-quality').textContent  = Math.round(prog.quality * 100) + '%';
+  if (g('sbcm-dims'))     g('sbcm-dims').textContent     = prog.w + ' × ' + prog.h + ' px';
+  if (g('sbcm-status'))   g('sbcm-status').textContent   = prog.done
+    ? '✓ Done — ' + fmt(originalBytes) + ' → ' + fmt(prog.bytes)
+    : 'Attempt ' + (prog.attempt + 1) + ' · ' + fmt(prog.bytes) + ' — still compressing…';
+  if (g('sbcm-bar')) {
+    g('sbcm-bar').style.width      = (prog.done ? 100 : Math.min(93, (prog.attempt / 12) * 100)) + '%';
+    g('sbcm-bar').style.background = prog.done ? 'var(--green)' : 'linear-gradient(90deg,var(--blue),var(--gold))';
+  }
+  if (g('sbcm-preview') && prog.previewUrl) g('sbcm-preview').src = prog.previewUrl;
+  if (g('sbcm-file-prog')) g('sbcm-file-prog').textContent = 'Image ' + fileIdx + ' of ' + totalImages;
+}
+
+function closeCompressionModal() {
+  const m = document.getElementById('sb-compress-modal');
+  if (!m) return;
+  const bar = document.getElementById('sbcm-bar');
+  if (bar) { bar.style.width = '100%'; bar.style.background = 'var(--green)'; }
+  setTimeout(() => { if (m) m.style.display = 'none'; }, 700);
+}
+
 
 /* ══════════════════════════════════════════════════════════════
    DIRECT API GENERATION
@@ -555,11 +649,20 @@ export async function generateDeck() {
   // Build messages array
   const messages = [{ role: 'user', content: [] }];
 
-  // Attach files — compress images to stay under Anthropic's 5 MB limit, include PDFs
+  // Attach files — compress images (with live modal for large ones), include PDFs
+  const imageFiles  = attachedFiles.filter(f => f.type.startsWith('image/'));
+  const largeImages = imageFiles.filter(f => f.size > 5 * 1024 * 1024);
+  if (largeImages.length > 0) openCompressionModal();
+
+  let imgIdx = 0;
   for (const f of attachedFiles) {
     if (f.type.startsWith('image/')) {
+      imgIdx++;
       if (statusText) statusText.textContent = `Compressing ${f.name}…`;
-      const compressed = await compressImage(f.data, f.type);
+      const onProg = largeImages.length > 0
+        ? p => updateCompressionModal(f.name, f.size, p, imgIdx, imageFiles.length)
+        : null;
+      const compressed = await compressImage(f.data, f.type, onProg);
       messages[0].content.push({
         type: 'image',
         source: { type: 'base64', media_type: compressed.media_type, data: compressed.data }
@@ -576,6 +679,7 @@ export async function generateDeck() {
       });
     }
   }
+  if (largeImages.length > 0) closeCompressionModal();
   if (statusText) statusText.textContent = 'Calling Claude API…';
 
   messages[0].content.push({ type: 'text', text: prompt });
