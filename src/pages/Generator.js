@@ -320,17 +320,17 @@ export function setupDropZone() {
 }
 
 export function handleFiles(fileList) {
-  const maxFiles = 5;
-  const maxSize = 20 * 1024 * 1024; // 20MB
+  const maxFiles = 25;
+  const maxSize = 50 * 1024 * 1024; // 50MB
   const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif', 'application/pdf'];
 
   Array.from(fileList).forEach(file => {
     if (attachedFiles.length >= maxFiles) {
-      if (_toast) _toast('Maximum 5 files allowed');
+      if (_toast) _toast('Maximum 25 files allowed');
       return;
     }
     if (file.size > maxSize) {
-      if (_toast) _toast(`${file.name} exceeds 20MB limit`);
+      if (_toast) _toast(`${file.name} exceeds 50 MB limit`);
       return;
     }
     if (!allowedTypes.some(t => file.type.startsWith(t.split('/')[0]) || file.type === t)) {
@@ -373,6 +373,8 @@ export function renderFileList() {
   }
 
   listEl.style.display = '';
+  listEl.style.maxHeight = '320px';
+  listEl.style.overflowY = 'auto';
   if (textArea) textArea.style.display = '';
   itemsEl.innerHTML = '';
 
@@ -459,48 +461,61 @@ export function updateKeyBadge() {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   IMAGE COMPRESSION (keeps images under Anthropic's 5 MB limit)
+   IMAGE COMPRESSION
+   Guarantees output is under Anthropic's hard 5 MB per-image limit.
+   Strategy: scale down large dimensions first, then sweep quality.
    ══════════════════════════════════════════════════════════ */
 
 async function compressImage(dataUrl, mediaType) {
-  const MAX_BYTES = 4.5 * 1024 * 1024;
-  const base64 = dataUrl.split(",")[1];
-  const byteSize = Math.ceil(base64.length * 3 / 4);
-  const outType = mediaType === "image/jpg" ? "image/jpeg" : mediaType;
-  if (byteSize <= MAX_BYTES) return { data: base64, media_type: outType };
+  const API_MAX = 4.75 * 1024 * 1024; // 4.75 MB — safely under the 5 MB API limit
+  const MAX_DIM  = 2048;               // cap longest edge for study-note readability
 
   return new Promise(resolve => {
     const img = new Image();
+    img.onerror = () => resolve({ data: dataUrl.split(',')[1], media_type: 'image/jpeg' });
     img.onload = () => {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      let width = img.naturalWidth;
-      let height = img.naturalHeight;
-      let quality = 0.82;
+      // Step 1 — scale down to MAX_DIM if needed (preserves aspect ratio)
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+      if (w > MAX_DIM || h > MAX_DIM) {
+        const scale = MAX_DIM / Math.max(w, h);
+        w = Math.max(1, Math.floor(w * scale));
+        h = Math.max(1, Math.floor(h * scale));
+      }
 
-      for (let attempt = 0; attempt < 8; attempt++) {
-        canvas.width = width;
-        canvas.height = height;
-        ctx.clearRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
-        const result = canvas.toDataURL("image/jpeg", quality);
-        const data = result.split(",")[1];
-        if (Math.ceil(data.length * 3 / 4) <= MAX_BYTES) {
-          resolve({ data, media_type: "image/jpeg" });
-          return;
-        }
-        if (quality > 0.5) {
-          quality -= 0.12;
+      const canvas = document.createElement('canvas');
+      const ctx    = canvas.getContext('2d');
+
+      // Step 2 — quality sweep, then dimension reduction if still too big
+      let quality = 0.85;
+      for (let attempt = 0; attempt < 12; attempt++) {
+        canvas.width  = w;
+        canvas.height = h;
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+
+        const dataUrlOut = canvas.toDataURL('image/jpeg', quality);
+        const b64        = dataUrlOut.split(',')[1];
+        const bytes      = Math.ceil(b64.length * 3 / 4);
+
+        if (bytes <= API_MAX) { resolve({ data: b64, media_type: 'image/jpeg' }); return; }
+
+        if (quality > 0.35) {
+          // First priority: lower quality
+          quality = Math.max(0.35, quality - 0.15);
         } else {
-          width = Math.floor(width * 0.8);
-          height = Math.floor(height * 0.8);
-          quality = 0.75;
+          // Quality floor hit — shrink dimensions by the exact ratio needed
+          const shrink = Math.sqrt(API_MAX / bytes) * 0.95; // 5 % safety margin
+          w = Math.max(1, Math.floor(w * shrink));
+          h = Math.max(1, Math.floor(h * shrink));
+          quality = 0.55; // reset quality after resize
         }
       }
-      // Last resort
-      canvas.width = width; canvas.height = height;
-      ctx.drawImage(img, 0, 0, width, height);
-      resolve({ data: canvas.toDataURL("image/jpeg", 0.4).split(",")[1], media_type: "image/jpeg" });
+
+      // Absolute fallback — should never be reached in practice
+      canvas.width = w; canvas.height = h;
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve({ data: canvas.toDataURL('image/jpeg', 0.3).split(',')[1], media_type: 'image/jpeg' });
     };
     img.src = dataUrl;
   });
@@ -550,6 +565,10 @@ export async function generateDeck() {
         source: { type: 'base64', media_type: compressed.media_type, data: compressed.data }
       });
     } else if (f.type === 'application/pdf') {
+      const pdfBytes = Math.ceil((f.data.split(',')[1] || '').length * 3 / 4);
+      if (pdfBytes > 30 * 1024 * 1024) {
+        if (_toast) _toast(`${f.name} is over 30 MB — Anthropic may reject it. Try a smaller PDF.`);
+      }
       const base64 = f.data.split(',')[1];
       messages[0].content.push({
         type: 'document',
