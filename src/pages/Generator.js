@@ -459,6 +459,54 @@ export function updateKeyBadge() {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   IMAGE COMPRESSION (keeps images under Anthropic's 5 MB limit)
+   ══════════════════════════════════════════════════════════ */
+
+async function compressImage(dataUrl, mediaType) {
+  const MAX_BYTES = 4.5 * 1024 * 1024;
+  const base64 = dataUrl.split(",")[1];
+  const byteSize = Math.ceil(base64.length * 3 / 4);
+  const outType = mediaType === "image/jpg" ? "image/jpeg" : mediaType;
+  if (byteSize <= MAX_BYTES) return { data: base64, media_type: outType };
+
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      let width = img.naturalWidth;
+      let height = img.naturalHeight;
+      let quality = 0.82;
+
+      for (let attempt = 0; attempt < 8; attempt++) {
+        canvas.width = width;
+        canvas.height = height;
+        ctx.clearRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        const result = canvas.toDataURL("image/jpeg", quality);
+        const data = result.split(",")[1];
+        if (Math.ceil(data.length * 3 / 4) <= MAX_BYTES) {
+          resolve({ data, media_type: "image/jpeg" });
+          return;
+        }
+        if (quality > 0.5) {
+          quality -= 0.12;
+        } else {
+          width = Math.floor(width * 0.8);
+          height = Math.floor(height * 0.8);
+          quality = 0.75;
+        }
+      }
+      // Last resort
+      canvas.width = width; canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve({ data: canvas.toDataURL("image/jpeg", 0.4).split(",")[1], media_type: "image/jpeg" });
+    };
+    img.src = dataUrl;
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════
    DIRECT API GENERATION
    ══════════════════════════════════════════════════════════ */
 
@@ -473,8 +521,9 @@ export async function generateDeck() {
   const count = parseInt(document.getElementById('gen-count')?.value) || 20;
   const deckName = document.getElementById('gen-name')?.value?.trim() || 'Generated Deck';
 
-  if (!notesText || notesText.length < 20) {
-    if (_toast) _toast('Please enter some study notes first (at least a few sentences)');
+  const hasFiles = attachedFiles.length > 0;
+  if (!hasFiles && (!notesText || notesText.length < 20)) {
+    if (_toast) _toast('Please enter some study notes or attach at least one file');
     return;
   }
 
@@ -491,17 +540,24 @@ export async function generateDeck() {
   // Build messages array
   const messages = [{ role: 'user', content: [] }];
 
-  // Attach files as image content blocks if any
-  attachedFiles.forEach(f => {
+  // Attach files — compress images to stay under Anthropic's 5 MB limit, include PDFs
+  for (const f of attachedFiles) {
     if (f.type.startsWith('image/')) {
-      const base64 = f.data.split(',')[1];
-      const mediaType = f.type === 'image/jpg' ? 'image/jpeg' : f.type;
+      if (statusText) statusText.textContent = `Compressing ${f.name}…`;
+      const compressed = await compressImage(f.data, f.type);
       messages[0].content.push({
         type: 'image',
-        source: { type: 'base64', media_type: mediaType, data: base64 }
+        source: { type: 'base64', media_type: compressed.media_type, data: compressed.data }
+      });
+    } else if (f.type === 'application/pdf') {
+      const base64 = f.data.split(',')[1];
+      messages[0].content.push({
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: base64 }
       });
     }
-  });
+  }
+  if (statusText) statusText.textContent = 'Calling Claude API…';
 
   messages[0].content.push({ type: 'text', text: prompt });
 
