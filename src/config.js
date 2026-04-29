@@ -1,7 +1,7 @@
 // config.js — Supabase credentials and app-wide constants
 
-export const SUPA_URL  = 'https://axcplsdcittgbufnwesj.supabase.co';
-export const SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4Y3Bsc2RjaXR0Z2J1Zm53ZXNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NDQ3NDEsImV4cCI6MjA4ODEyMDc0MX0.AaM4ovcKtrkEPawtB-3MqDkDtDZ6pfFsW9Y3Ex4bKa8';
+export const SUPA_URL  = import.meta.env.VITE_SUPABASE_URL;
+export const SUPA_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const KEYS = {
   memory:  'sb_memory_v1',
