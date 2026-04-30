@@ -3,7 +3,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { SUPA_URL, SUPA_ANON, KEYS } from '../config.js';
 
-export const db = createClient(SUPA_URL, SUPA_ANON);
+export let db = null;
+if (SUPA_URL && SUPA_ANON) {
+  db = createClient(SUPA_URL, SUPA_ANON);
+} else {
+  console.warn('Supabase not configured — running in localStorage-only mode');
+}
 
 let _supaUser = null;
 export function getSupaUser() { return _supaUser; }

@@ -11,6 +11,7 @@ export function initAuthCallbacks({ toast, refreshAll }) {
 }
 
 export async function initAuth() {
+  if (!db) { console.warn('Supabase not configured — auth disabled'); return; }
   try {
     const { data: { session } } = await db.auth.getSession();
     if (session?.user) {
@@ -96,7 +97,7 @@ export function updateAuthStatus() {
 }
 
 async function signOut() {
-  await db.auth.signOut();
+  if (db) await db.auth.signOut();
   setSupaUser(null);
   updateAuthStatus();
   _toast?.('Signed out. Data saved locally.');
@@ -147,6 +148,10 @@ async function sendMagicLink() {
     return;
   }
   if (errEl) errEl.textContent = '';
+  if (!db) {
+    if (errEl) errEl.textContent = 'Supabase not configured — sign-in unavailable';
+    return;
+  }
   const { error } = await db.auth.signInWithOtp({
     email,
     options: { emailRedirectTo: window.location.origin }
