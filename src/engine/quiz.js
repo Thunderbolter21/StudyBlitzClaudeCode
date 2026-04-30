@@ -982,12 +982,25 @@ export function getAllWeakCount() {
 export function renderFixButton(q, area) {
   if (!area) area = document.getElementById('q-fix-area');
   if (!area) return;
-  const btn = document.createElement('button');
-  btn.className = 'btn btn-ghost btn-sm';
-  btn.style.cssText = 'font-size:0.72rem;padding:0.3rem 0.7rem;';
-  btn.textContent = '✏️ Fix Answer';
-  btn.onclick = () => showFixPicker(q, area, btn);
-  area.appendChild(btn);
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:0.4rem;';
+
+  const ansBtn = document.createElement('button');
+  ansBtn.className = 'btn btn-ghost btn-sm';
+  ansBtn.style.cssText = 'font-size:0.72rem;padding:0.3rem 0.7rem;';
+  ansBtn.textContent = '✏️ Fix Answer';
+  ansBtn.onclick = () => showFixPicker(q, area, ansBtn);
+  wrap.appendChild(ansBtn);
+
+  const phraseBtn = document.createElement('button');
+  phraseBtn.className = 'btn btn-ghost btn-sm';
+  phraseBtn.style.cssText = 'font-size:0.72rem;padding:0.3rem 0.7rem;';
+  phraseBtn.textContent = '✏️ Fix question phrasing';
+  phraseBtn.onclick = () => openPhrasingModal(q, null, null);
+  wrap.appendChild(phraseBtn);
+
+  area.appendChild(wrap);
 }
 
 export function showFixPicker(q, area, triggerBtn) {
@@ -1071,6 +1084,101 @@ export function fixAnswer(q, newAns, area) {
     btn.classList.remove('correct', 'wrong');
     if (i === newAns) btn.classList.add('correct');
   });
+}
+
+// ══════════════════════════════════════════════
+//  FIX QUESTION PHRASING
+// ══════════════════════════════════════════════
+
+export function openPhrasingModal(question, deckId, onSave) {
+  const existing = document.getElementById('fix-phrasing-modal');
+  if (existing) existing.remove();
+
+  const ov = document.createElement('div');
+  ov.id = 'fix-phrasing-modal';
+  ov.className = 'modal-overlay';
+  ov.style.display = 'flex';
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+  document.body.appendChild(ov);
+
+  const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+  const ansLabel = (question.opts && question.ans != null)
+    ? `${letters[question.ans] || '?'} \u2014 ${question.opts[question.ans] || ''}`
+    : '\u2014';
+
+  ov.innerHTML = `
+    <div class="modal-box" style="max-width:520px;">
+      <h2>\u270f\ufe0f Edit Question</h2>
+      <label class="lbl-s">Question Text</label>
+      <textarea id="fphr-text" style="width:100%;box-sizing:border-box;min-height:80px;resize:vertical;font-family:inherit;font-size:0.88rem;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);line-height:1.5;margin-bottom:0.5rem;"></textarea>
+      <div style="font-size:0.72rem;color:var(--muted);margin-bottom:0.8rem;">
+        Category: <strong>${question.cat || '\u2014'}</strong>&nbsp;&nbsp;\u00b7&nbsp;&nbsp;Answer: ${ansLabel}
+      </div>
+      <div id="fphr-err" style="font-size:0.78rem;color:var(--accent);min-height:1.1rem;margin-bottom:0.6rem;"></div>
+      <div style="display:flex;gap:0.8rem;">
+        <button class="btn btn-primary" id="fphr-save">Save Changes</button>
+        <button class="btn btn-ghost" id="fphr-cancel">Cancel</button>
+      </div>
+    </div>`;
+
+  const ta = document.getElementById('fphr-text');
+  ta.value = question.q;
+
+  // Auto-resize textarea to fit content
+  const resize = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
+  ta.addEventListener('input', resize);
+  setTimeout(resize, 0);
+
+  document.getElementById('fphr-cancel').onclick = () => ov.remove();
+
+  document.getElementById('fphr-save').onclick = () => {
+    const newText = ta.value.trim();
+    const errEl   = document.getElementById('fphr-err');
+    if (!newText)              { errEl.textContent = 'Question text cannot be empty'; return; }
+    if (newText === question.q){ errEl.textContent = 'No changes made'; return; }
+
+    const oldText = question.q;
+    const decks   = getDecks();
+    let updated   = false;
+    decks.forEach(d => {
+      (d.questions || []).forEach(dq => {
+        if (dq.id === question.id) { dq.q = newText; updated = true; }
+      });
+    });
+
+    if (updated) {
+      saveDecks(decks);
+      question.q = newText;
+
+      // Clear memory — fresh start since question text changed
+      const mem = getMem();
+      delete mem[question.id];
+      setMem(mem);
+
+      // Update live QS session if active
+      if (QS.questions) {
+        const liveQ = QS.questions.find(qq => qq.id === question.id);
+        if (liveQ) liveQ.q = newText;
+      }
+
+      // Update on-screen question text if this question is currently displayed
+      const qTextEl = document.getElementById('q-text');
+      if (qTextEl && qTextEl.textContent.trim() === oldText.trim()) {
+        qTextEl.textContent = newText;
+      }
+
+      if (_toast) _toast('\u2713 Question updated');
+      onSave?.();
+    }
+
+    ov.remove();
+  };
+
+  // Escape closes the modal
+  const onEsc = e => { if (e.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', onEsc); } };
+  document.addEventListener('keydown', onEsc);
+
+  setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 80);
 }
 
 // ══════════════════════════════════════════════

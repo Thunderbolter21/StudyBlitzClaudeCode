@@ -3,7 +3,7 @@
 import { getDecks, saveDecks, getDeckById, getDeckColor } from '../engine/decks.js';
 import { getClasses, saveClasses } from '../engine/classes.js';
 import { getMem, getRec, isMastered, isWeak } from '../engine/memory.js';
-import { getBestHS } from '../engine/quiz.js';
+import { getBestHS, openPhrasingModal } from '../engine/quiz.js';
 import { DECK_COLORS } from '../config.js';
 import { supaSaveDeck } from '../engine/storage.js';
 
@@ -56,6 +56,7 @@ export function toggleDeckMenu(e, deckId) {
   menu.dataset.deckId = String(deckId);
   menu.innerHTML = `
     <button class="dd-item" data-action="rename"><span class="dd-icon">✏️</span>Rename</button>
+    <button class="dd-item" data-action="edit-questions"><span class="dd-icon">✏️</span>Edit Questions</button>
     <button class="dd-item" data-action="assign"><span class="dd-icon">🎓</span>Assign to Class</button>
     <button class="dd-item" data-action="info"><span class="dd-icon">ℹ️</span>Info</button>
     <div class="dd-divider"></div>
@@ -82,6 +83,7 @@ export function toggleDeckMenu(e, deckId) {
   document.body.appendChild(menu);
 
   menu.querySelector('[data-action="rename"]').onclick = (ev) => { ev.stopPropagation(); renameDeck(deckId); };
+  menu.querySelector('[data-action="edit-questions"]').onclick = (ev) => { ev.stopPropagation(); openQuestionPicker(deckId); };
   menu.querySelector('[data-action="assign"]').onclick = (ev) => { ev.stopPropagation(); openAssignClassModal(deckId); };
   menu.querySelector('[data-action="info"]').onclick = (ev) => { ev.stopPropagation(); toggleDeckInfo(deckId); };
   menu.querySelector('[data-action="delete"]').onclick = (ev) => { ev.stopPropagation(); _deleteDeck?.(deckId); };
@@ -271,6 +273,54 @@ function confirmRenameClass(classId) {
   }
   const modal = document.getElementById('class-menu-modal');
   if (modal) modal.remove();
+}
+
+
+// ── Question picker (entry point for Edit Questions from deck card) ──
+export function openQuestionPicker(deckId) {
+  const ctxMenu = document.getElementById('deck-ctx-menu');
+  if (ctxMenu) ctxMenu.remove();
+
+  const deck = getDeckById(deckId);
+  if (!deck || !deck.questions.length) {
+    _toast?.('This deck has no questions');
+    return;
+  }
+
+  const existing = document.getElementById('question-picker-modal');
+  if (existing) existing.remove();
+
+  const ov = makeModal('question-picker-modal');
+  ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+
+  const rows = deck.questions.map((q, i) => {
+    const preview = q.q.length > 80 ? q.q.slice(0, 80) + '\u2026' : q.q;
+    return `<button class="dd-item" data-qidx="${i}" style="width:100%;text-align:left;display:flex;gap:0.8rem;align-items:flex-start;padding:0.6rem 0.8rem;border-radius:8px;">
+      <span style="font-size:0.72rem;color:var(--muted);flex-shrink:0;padding-top:0.1rem;min-width:1.6rem;">${i + 1}.</span>
+      <span style="font-size:0.82rem;line-height:1.4;">${preview}</span>
+    </button>`;
+  }).join('');
+
+  ov.innerHTML = `
+    <div class="modal-box" style="max-width:560px;">
+      <h2 style="margin-bottom:0.3rem;">\u270f\ufe0f Edit Questions</h2>
+      <p style="color:var(--muted);font-size:0.82rem;margin-bottom:1rem;">${deck.name} &nbsp;\u00b7&nbsp; ${deck.questions.length} question${deck.questions.length !== 1 ? 's' : ''}</p>
+      <div style="max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:0.25rem;margin-bottom:1rem;">
+        ${rows}
+      </div>
+      <div style="text-align:right;">
+        <button class="btn btn-ghost" id="qpicker-close">Close</button>
+      </div>
+    </div>`;
+
+  ov.querySelector('#qpicker-close').onclick = () => ov.remove();
+  ov.querySelectorAll('[data-qidx]').forEach(btn => {
+    btn.onclick = () => {
+      const q = deck.questions[parseInt(btn.dataset.qidx)];
+      ov.remove();
+      openPhrasingModal(q, deckId, () => _refreshAll?.());
+    };
+  });
 }
 
 function confirmDeleteClass(classId) {
