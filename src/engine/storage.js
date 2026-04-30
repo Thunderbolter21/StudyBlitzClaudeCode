@@ -29,7 +29,10 @@ function withTimeout(promise) {
 export function lsLoad(k) { try { return JSON.parse(localStorage.getItem(k)) || null; } catch(e) { return null; } }
 export function lsSave(k,v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} }
 export function load(k) { return lsLoad(k); }
-export function save(k,v) { lsSave(k,v); }
+
+// Keys whose writes should trigger a background cloud push
+const _SYNC_KEYS = new Set(['sb_decks_v1', 'sb_memory_v1', 'sb_classes_v1', 'sb_highscores_v1']);
+export function save(k, v) { lsSave(k, v); if (_SYNC_KEYS.has(k)) _onSync?.(); }
 
 // ── Supabase: load all decks for current user ──
 export async function supaLoadDecks() {

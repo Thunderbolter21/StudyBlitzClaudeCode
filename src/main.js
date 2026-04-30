@@ -9,7 +9,8 @@ import { nav, openNav, closeNav, initNavCallbacks, initNavListeners } from './co
 import { initDeckCardCallbacks } from './components/DeckCard.js';
 import { toggleDeckMenu, openAssignClassModal, openCreateClassModal, openClassMenu, initModalCallbacks } from './components/Modals.js';
 import { initDeckCallbacks, getDecks, getDeckById, deleteDeck, initBuiltins } from './engine/decks.js';
-import { initAuth, syncOnBoot, updateAuthStatus, initAuthCallbacks } from './engine/auth.js';
+import { initAuth, syncOnBoot, scheduleSync, openAuthModal, updateAuthStatus, initAuthCallbacks } from './engine/auth.js';
+import { registerSyncCallback } from './engine/storage.js';
 import {
   QS, EX, getHS, hsKey, getBestHS, saveHS,
   quickStartDeck, drillDeck, launchQuiz, launchDrillAll, launchDrillFromResults,
@@ -113,6 +114,7 @@ function exposeGlobals() {
   window.toggleKeyVis = toggleKeyVis;
   window.saveApiKey = saveApiKey;
   window.toast = toast;
+  window.openAuthModal = openAuthModal;
 }
 
 // ── Keyboard handler ──
@@ -145,20 +147,21 @@ function initClickOutside() {
 
 // ── Boot ──
 async function boot() {
-  wireCallbacks();
+  wireCallbacks();                        // must be first — wires toast/_refreshAll
   exposeGlobals();
   initNavListeners();
   initKeyboard();
   initClickOutside();
   setupDropZone();
   updateKeyBadge();
+  registerSyncCallback(scheduleSync);     // auto-sync on any data save
 
-  await initBuiltins();
-  await initAuth();
-  await syncOnBoot();
+  await syncOnBoot();                     // 4a: restore session + silent merge FIRST
+  await initBuiltins();                   // ensure MKT300 built-in exists
+  initAuth();                             // set up onAuthStateChange listener
 
   refreshAll();
-  updateAuthStatus();
+  updateAuthStatus();                     // render correct auth state in nav + banner
 }
 
 boot();

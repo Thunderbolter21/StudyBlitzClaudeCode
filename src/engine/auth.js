@@ -232,10 +232,22 @@ export function scheduleSync() {
   _syncTimer = setTimeout(pushToCloud, 2000);
 }
 
+// Bidirectional heartbeat — pushes local changes then pulls cloud
+// so a second device picks up changes within 60 s (Scenario E)
+async function _heartbeatSync() {
+  if (!isLoggedIn() || !db) return;
+  try {
+    await pushToCloud();
+    const cloud = await _fetchCloud();
+    _applyMerge(cloud);
+    _refreshAll?.();
+  } catch (e) { console.warn('Heartbeat sync error:', e); }
+}
+
 export function startBackgroundSync() {
   _stopSync();
   if (!isLoggedIn()) return;
-  _heartbeat = setInterval(pushToCloud, 60_000);
+  _heartbeat = setInterval(_heartbeatSync, 60_000);
   window.addEventListener('beforeunload', pushToCloud);
 }
 
