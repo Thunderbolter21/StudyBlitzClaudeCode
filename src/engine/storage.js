@@ -94,12 +94,14 @@ export async function supaSyncMemory(memObj) {
   if (error) console.warn('supaSyncMemory error', error);
 }
 
+// ── Sync callback (registered by auth.js to trigger cloud push on writes) ──
+let _onSync = null;
+export function registerSyncCallback(fn) { _onSync = fn; }
+
 // ── Debounced sync after local memory writes ──
-let _memSyncTimer = null;
 export function saveMem(memObj) {
   lsSave(KEYS.memory, memObj);
-  clearTimeout(_memSyncTimer);
-  _memSyncTimer = setTimeout(() => supaSyncMemory(memObj), 2000);
+  _onSync?.();
 }
 
 // ── Debounced generic sync (used after deck/class saves) ──

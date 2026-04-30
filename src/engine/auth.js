@@ -1,197 +1,410 @@
-// auth.js — Supabase auth: magic link, sign-in/out, auth state, status UI
+// auth.js — email+password auth, Supabase blob sync, session restore
 
-import { db, setSupaUser, getSupaUser, lsLoad, lsSave, supaLoadDecks, supaSaveDeck, supaLoadMemory, supaSyncMemory } from './storage.js';
+import { db, lsLoad, lsSave, getSupaUser, setSupaUser } from './storage.js';
 import { KEYS } from '../config.js';
-import { getMem, setMem, invalidateMemCache } from './memory.js';
-import { saveDecks, invalidateDecksCache } from './decks.js';
+import { invalidateMemCache } from './memory.js';
+import { invalidateDecksCache } from './decks.js';
 
 let _toast, _refreshAll;
 export function initAuthCallbacks({ toast, refreshAll }) {
-  _toast = toast; _refreshAll = refreshAll;
+  _toast = toast;
+  _refreshAll = refreshAll;
 }
 
-export async function initAuth() {
-  if (!db) { console.warn('Supabase not configured — auth disabled'); return; }
-  try {
-    const { data: { session } } = await db.auth.getSession();
-    if (session?.user) {
-      setSupaUser(session.user);
-    }
-  } catch (e) {
-    console.warn('Auth init failed:', e);
+// ── Sync state ──────────────────────────────────────────────────────────────
+let _syncTimer = null;
+let _heartbeat = null;
+
+// ── Public state ────────────────────────────────────────────────────────────
+export function getCurrentUser() { return getSupaUser(); }
+export function isLoggedIn()     { return !!getSupaUser(); }
+
+// ── Sign Up ─────────────────────────────────────────────────────────────────
+export async function signUp(email, password) {
+  if (!db) return 'Supabase not configured — running in local mode';
+  const { data, error } = await db.auth.signUp({ email, password });
+  if (error) return error.message;
+  if (data.session) await handlePostAuth(data.session, 'new');
+  return null; // null = success
+}
+
+// ── Sign In ─────────────────────────────────────────────────────────────────
+export async function signIn(email, password) {
+  if (!db) return 'Supabase not configured — running in local mode';
+  const { data, error } = await db.auth.signInWithPassword({ email, password });
+  if (error) return error.message;
+  if (data.session) await handlePostAuth(data.session, 'existing');
+  return null;
+}
+
+// ── Sign Out ────────────────────────────────────────────────────────────────
+export async function signOut() {
+  if (db) await db.auth.signOut().catch(() => {});
+  setSupaUser(null);
+  _stopSync();
+  updateAuthUI();
+  _refreshAll?.();
+  _toast?.('Signed out. Your data is still saved locally.');
+}
+
+// ── Post-auth handler ───────────────────────────────────────────────────────
+async function handlePostAuth(session, type) {
+  setSupaUser(session.user);
+  updateAuthUI();
+
+  const localDecks = (lsLoad(KEYS.decks) || []).filter(d => d.id !== 'builtin-mkt300');
+  if (localDecks.length > 0) {
+    await _showMergePrompt();
+  } else {
+    await pullFromCloud();
   }
 
-  db.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && session?.user) {
-      const current = getSupaUser();
-      if (!current || current.id !== session.user.id) {
-        await onSignIn(session.user);
-      }
-    } else if (event === 'SIGNED_OUT') {
+  startBackgroundSync();
+  _refreshAll?.();
+  _toast?.(type === 'new'
+    ? 'Account created! Welcome to StudyBlitz.'
+    : 'Signed in! Your data is synced.');
+}
+
+// ── Merge / replace prompt ──────────────────────────────────────────────────
+function _showMergePrompt() {
+  return new Promise(resolve => {
+    let modal = document.getElementById('sb-merge-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'sb-merge-modal';
+      modal.className = 'modal-overlay';
+      document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+      <div class="modal-box" style="max-width:440px;">
+        <h2>You have existing data</h2>
+        <p style="color:var(--muted);font-size:0.88rem;line-height:1.6;margin-bottom:1.5rem;">
+          This device has local decks and progress.<br>
+          What would you like to do?
+        </p>
+        <div style="display:flex;flex-direction:column;gap:0.8rem;">
+          <button class="btn btn-primary" id="sb-merge-btn" style="justify-content:center;">
+            Merge Everything — keep both
+          </button>
+          <button class="btn btn-ghost" id="sb-replace-btn" style="justify-content:center;">
+            Use My Account Data — replace local
+          </button>
+        </div>
+      </div>`;
+    modal.style.display = 'flex';
+    document.getElementById('sb-merge-btn').onclick = async () => {
+      modal.style.display = 'none'; await mergeData(); resolve();
+    };
+    document.getElementById('sb-replace-btn').onclick = async () => {
+      modal.style.display = 'none'; await pullFromCloud(); resolve();
+    };
+  });
+}
+
+// ── Cloud fetch helper ──────────────────────────────────────────────────────
+async function _fetchCloud() {
+  const uid = getSupaUser().id;
+  const [d, m, c, h] = await Promise.all([
+    db.from('user_decks').select('data').eq('user_id', uid).maybeSingle(),
+    db.from('user_memory').select('data').eq('user_id', uid).maybeSingle(),
+    db.from('user_classes').select('data').eq('user_id', uid).maybeSingle(),
+    db.from('user_highscores').select('data').eq('user_id', uid).maybeSingle(),
+  ]);
+  return {
+    decks:       d.data?.data  ?? null,
+    memory:      m.data?.data  ?? null,
+    classes:     c.data?.data  ?? null,
+    highscores:  h.data?.data  ?? null,
+  };
+}
+
+// ── Pull from cloud (replaces local) ───────────────────────────────────────
+export async function pullFromCloud() {
+  if (!db || !getSupaUser()) return;
+  try {
+    const cloud = await _fetchCloud();
+    const localDecks = lsLoad(KEYS.decks) || [];
+    const builtin    = localDecks.find(d => d.id === 'builtin-mkt300');
+
+    if (cloud.decks !== null) {
+      lsSave(KEYS.decks, builtin ? [builtin, ...cloud.decks] : cloud.decks);
+      invalidateDecksCache();
+    }
+    if (cloud.memory     !== null) { lsSave(KEYS.memory,     cloud.memory);     invalidateMemCache(); }
+    if (cloud.classes    !== null)   lsSave(KEYS.classes,    cloud.classes);
+    if (cloud.highscores !== null)   lsSave(KEYS.highscores, cloud.highscores);
+  } catch (e) { console.warn('pullFromCloud error:', e); }
+}
+
+// ── Merge local + cloud ─────────────────────────────────────────────────────
+export async function mergeData() {
+  if (!db || !getSupaUser()) return;
+  try {
+    const cloud = await _fetchCloud();
+    _applyMerge(cloud);
+    await pushToCloud();
+  } catch (e) { console.warn('mergeData error:', e); }
+}
+
+// Shared merge logic (used by mergeData and restoreSession)
+function _applyMerge(cloud) {
+  const localDecks = lsLoad(KEYS.decks) || [];
+
+  // Decks — dedupe by id, prefer newer by created date
+  if (cloud.decks !== null) {
+    const map = new Map();
+    [...(cloud.decks || []), ...localDecks].forEach(d => {
+      if (d.id === 'builtin-mkt300') return;
+      const ex = map.get(d.id);
+      if (!ex || new Date(d.created || 0) >= new Date(ex.created || 0)) map.set(d.id, d);
+    });
+    const builtin = localDecks.find(d => d.id === 'builtin-mkt300');
+    lsSave(KEYS.decks, builtin ? [builtin, ...map.values()] : [...map.values()]);
+    invalidateDecksCache();
+  }
+
+  // Memory — keep record with higher total answers
+  const localMem = lsLoad(KEYS.memory) || {};
+  if (cloud.memory !== null) {
+    const merged = { ...(cloud.memory || {}) };
+    for (const [qid, lr] of Object.entries(localMem)) {
+      if (!merged[qid] || lr.total >= merged[qid].total) merged[qid] = lr;
+    }
+    lsSave(KEYS.memory, merged);
+    invalidateMemCache();
+  }
+
+  // Classes — dedupe by id
+  if (cloud.classes !== null) {
+    const map = new Map();
+    [...(cloud.classes || []), ...(lsLoad(KEYS.classes) || [])].forEach(c => map.set(c.id, c));
+    lsSave(KEYS.classes, [...map.values()]);
+  }
+
+  // Highscores — keep higher score per key
+  if (cloud.highscores !== null) {
+    const localHS = lsLoad(KEYS.highscores) || {};
+    const merged  = { ...(cloud.highscores || {}) };
+    for (const [k, v] of Object.entries(localHS)) {
+      if (merged[k] === undefined || v > merged[k]) merged[k] = v;
+    }
+    lsSave(KEYS.highscores, merged);
+  }
+}
+
+// ── Push to cloud ───────────────────────────────────────────────────────────
+export async function pushToCloud() {
+  if (!db || !getSupaUser()) return;
+  _updateSyncStatus('syncing');
+  const uid = getSupaUser().id;
+  const now = new Date().toISOString();
+  try {
+    await Promise.all([
+      db.from('user_decks').upsert(
+        { user_id: uid, data: (lsLoad(KEYS.decks) || []).filter(d => d.id !== 'builtin-mkt300'), updated_at: now },
+        { onConflict: 'user_id' }
+      ),
+      db.from('user_memory').upsert(
+        { user_id: uid, data: lsLoad(KEYS.memory) || {}, updated_at: now },
+        { onConflict: 'user_id' }
+      ),
+      db.from('user_classes').upsert(
+        { user_id: uid, data: lsLoad(KEYS.classes) || [], updated_at: now },
+        { onConflict: 'user_id' }
+      ),
+      db.from('user_highscores').upsert(
+        { user_id: uid, data: lsLoad(KEYS.highscores) || {}, updated_at: now },
+        { onConflict: 'user_id' }
+      ),
+    ]);
+    _updateSyncStatus('synced');
+  } catch (e) {
+    console.warn('pushToCloud error:', e);
+    _updateSyncStatus('error');
+  }
+}
+
+// ── Background sync ─────────────────────────────────────────────────────────
+export function scheduleSync() {
+  if (!isLoggedIn()) return;
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(pushToCloud, 2000);
+}
+
+export function startBackgroundSync() {
+  _stopSync();
+  if (!isLoggedIn()) return;
+  _heartbeat = setInterval(pushToCloud, 60_000);
+  window.addEventListener('beforeunload', pushToCloud);
+}
+
+function _stopSync() {
+  clearTimeout(_syncTimer);
+  clearInterval(_heartbeat);
+  _heartbeat = null;
+  window.removeEventListener('beforeunload', pushToCloud);
+}
+
+// ── Restore session on boot ─────────────────────────────────────────────────
+export async function restoreSession() {
+  if (!db) return;
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    if (!session?.user) return;
+    setSupaUser(session.user);
+    const cloud = await _fetchCloud();
+    _applyMerge(cloud);   // silent — no modal, no immediate push
+    startBackgroundSync();
+    updateAuthUI();
+  } catch (e) {
+    console.warn('restoreSession error:', e);
+  }
+}
+
+// Backward-compat alias — main.js calls syncOnBoot() in its boot sequence
+export const syncOnBoot = restoreSession;
+
+// ── Auth state listener ─────────────────────────────────────────────────────
+export function initAuth() {
+  if (!db) return;
+  db.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') {
       setSupaUser(null);
-      updateAuthStatus();
+      _stopSync();
+      updateAuthUI();
     }
   });
 }
 
-async function onSignIn(user) {
-  setSupaUser(user);
-  updateAuthStatus();
-  _toast?.('Signed in as ' + user.email + ' — syncing...', 3500);
-
-  const cloudDecks = await supaLoadDecks();
-  if (cloudDecks && cloudDecks.length > 0) {
-    const localDecks = lsLoad(KEYS.decks) || [];
-    const cloudIds = new Set(cloudDecks.map(d => d.id));
-    const localOnly = localDecks.filter(d => !cloudIds.has(d.id) && d.id !== 'builtin-mkt300');
-    for (const d of localOnly) await supaSaveDeck(d);
-    const merged = cloudDecks.filter(d => d.id !== 'builtin-mkt300');
-    const localBuiltin = localDecks.find(d => d.id === 'builtin-mkt300');
-    const allDecks = localBuiltin ? [localBuiltin, ...merged, ...localOnly] : [...merged, ...localOnly];
-    saveDecks(allDecks);
-    _refreshAll?.();
-    _toast?.('Decks synced across devices', 3000);
-  } else {
-    const localDecks = lsLoad(KEYS.decks) || [];
-    for (const d of localDecks) {
-      if (d.id !== 'builtin-mkt300') await supaSaveDeck(d);
-    }
-  }
-
-  const cloudMem = await supaLoadMemory();
-  if (cloudMem && Object.keys(cloudMem).length > 0) {
-    const localMem = getMem();
-    const mergedMem = { ...localMem };
-    for (const [qid, cr] of Object.entries(cloudMem)) {
-      const lr = localMem[qid];
-      if (!lr || cr.total >= lr.total) mergedMem[qid] = cr;
-    }
-    lsSave(KEYS.memory, mergedMem);
-    invalidateMemCache();
-    _refreshAll?.();
-  } else {
-    await supaSyncMemory(getMem());
-  }
+// ── UI helpers ──────────────────────────────────────────────────────────────
+export function updateAuthUI() {
+  _updateNavAuth();
+  _updateBanner();
 }
 
-export function updateAuthStatus() {
+// Backward-compat alias — main.js calls updateAuthStatus()
+export const updateAuthStatus = updateAuthUI;
+
+function _updateNavAuth() {
   const statusEl = document.getElementById('auth-status');
-  const btnEl = document.getElementById('link-account-btn');
+  const btnEl    = document.getElementById('link-account-btn');
   if (!statusEl) return;
   const user = getSupaUser();
   if (user) {
     const email = user.email || 'Signed in';
-    const short = email.length > 22 ? email.substring(0, 19) + '...' : email;
-    statusEl.innerHTML = '<span style="color:var(--green)">&#9679;</span> ' + short;
+    const short = email.length > 24 ? email.slice(0, 21) + '…' : email;
+    statusEl.innerHTML = `<span style="color:var(--green)">●</span> ${short}`;
     if (btnEl) {
-      btnEl.querySelector('span:last-child').textContent = 'Sign Out';
+      btnEl.innerHTML = `<span class="icon">🔓</span><span>Sign Out</span>`;
       btnEl.onclick = signOut;
     }
   } else {
     statusEl.textContent = 'Not signed in — data is local only';
     if (btnEl) {
-      btnEl.querySelector('span:last-child').textContent = 'Link Account';
-      btnEl.onclick = openAuthModal;
+      btnEl.innerHTML = `<span class="icon">🔗</span><span>Sign In / Create Account</span>`;
+      btnEl.onclick = () => openAuthModal();
     }
   }
+  // Sync status line (only shown when logged in)
+  let syncEl = document.getElementById('sb-sync-status');
+  if (!syncEl && user) {
+    syncEl = document.createElement('div');
+    syncEl.id = 'sb-sync-status';
+    syncEl.style.cssText = 'font-size:0.68rem;padding:0.1rem 0 0.3rem;';
+    statusEl.insertAdjacentElement('afterend', syncEl);
+  }
+  if (syncEl) syncEl.style.display = user ? '' : 'none';
 }
 
-async function signOut() {
-  if (db) await db.auth.signOut();
-  setSupaUser(null);
-  updateAuthStatus();
-  _toast?.('Signed out. Data saved locally.');
+function _updateBanner() {
+  const banner = document.getElementById('sb-auth-banner');
+  if (banner) banner.style.display = isLoggedIn() ? 'none' : 'flex';
 }
 
-export function openAuthModal() {
-  const existing = document.getElementById('auth-modal');
-  if (existing) { existing.style.display = 'flex'; return; }
-  const ov = document.createElement('div');
-  ov.id = 'auth-modal';
-  ov.className = 'modal-overlay';
-  ov.style.display = 'flex';
-  ov.innerHTML = `
-    <div class="modal-box">
-      <h2>Sign In to StudyBlitz</h2>
-      <p style="color:var(--muted);font-size:.88rem;margin-bottom:1.2rem;line-height:1.6;">
-        Enter your email and we'll send you a magic link — no password needed.
-        Your decks and progress sync automatically across all your devices.
-      </p>
-      <div id="auth-sent" style="display:none;background:rgba(0,229,160,.1);border:1px solid var(--green);border-radius:10px;padding:1rem;font-size:.88rem;color:var(--green);margin-bottom:1rem;">
-        Magic link sent! Check your email and click the link to sign in.
+function _updateSyncStatus(state) {
+  const el = document.getElementById('sb-sync-status');
+  if (!el) return;
+  if      (state === 'syncing') el.innerHTML = `<span style="color:var(--muted)">⟳ Syncing…</span>`;
+  else if (state === 'synced')  el.innerHTML = `<span style="color:var(--green)">● Synced</span>`;
+  else if (state === 'error')   el.innerHTML = `<span style="color:var(--accent)">⚠ Sync error</span>`;
+}
+
+// ── Auth modal ──────────────────────────────────────────────────────────────
+export function openAuthModal(mode = 'signin') {
+  let modal = document.getElementById('sb-auth-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'sb-auth-modal';
+    modal.className = 'modal-overlay';
+    modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
+    document.body.appendChild(modal);
+  }
+  _renderAuthModal(modal, mode);
+  modal.style.display = 'flex';
+}
+
+function _renderAuthModal(modal, mode) {
+  const isSignUp = mode === 'signup';
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:400px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem;">
+        <h2 style="margin:0;">${isSignUp ? 'Create Account' : 'Welcome Back'}</h2>
+        <button class="btn btn-ghost" id="sb-ac" style="padding:0.3rem 0.6rem;font-size:1rem;">✕</button>
       </div>
-      <label class="lbl-s">Your Email</label>
-      <input type="email" id="auth-email-input" placeholder="you@example.com" style="margin-bottom:1rem;" />
-      <div id="auth-err" style="font-size:.82rem;color:var(--accent);min-height:1rem;margin-bottom:.8rem;"></div>
-      <div style="display:flex;gap:.8rem;flex-wrap:wrap;">
-        <button class="btn btn-primary" id="auth-send-btn">Send Magic Link</button>
-        <button class="btn btn-ghost" id="auth-cancel-btn">Cancel</button>
-      </div>
-      <p style="font-size:.72rem;color:var(--muted);margin-top:1rem;">
-        First time? Just enter your email — an account is created automatically.
+      <label class="lbl-s">Email</label>
+      <input type="email" id="sb-ae" placeholder="you@example.com" style="margin-bottom:0.8rem;" />
+      <label class="lbl-s">Password</label>
+      <input type="password" id="sb-ap" placeholder="Password (min 6 chars)" style="margin-bottom:${isSignUp ? '0.8rem' : '0.3rem'};" />
+      ${isSignUp ? `<label class="lbl-s">Confirm Password</label>
+      <input type="password" id="sb-ap2" placeholder="Confirm password" style="margin-bottom:0.3rem;" />` : ''}
+      <div id="sb-aerr" style="font-size:0.82rem;color:var(--accent);min-height:1.2rem;margin-bottom:0.8rem;"></div>
+      <button class="btn btn-primary" id="sb-asub" style="width:100%;justify-content:center;margin-bottom:1rem;">
+        ${isSignUp ? 'Create Account' : 'Sign In'}
+      </button>
+      <p style="font-size:0.78rem;color:var(--muted);text-align:center;margin:0;">
+        ${isSignUp
+          ? `Already have an account? <a href="#" id="sb-atog" style="color:var(--blue);">Sign in</a>`
+          : `Don't have an account? <a href="#" id="sb-atog" style="color:var(--blue);">Sign up</a>`}
       </p>
     </div>`;
-  document.body.appendChild(ov);
-  ov.querySelector('#auth-send-btn').onclick = sendMagicLink;
-  ov.querySelector('#auth-cancel-btn').onclick = () => { ov.style.display = 'none'; };
-  ov.onclick = (e) => { if (e.target === ov) ov.style.display = 'none'; };
-  const inp = ov.querySelector('#auth-email-input');
-  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMagicLink(); });
-  setTimeout(() => inp.focus(), 100);
-}
 
-async function sendMagicLink() {
-  const email = document.getElementById('auth-email-input')?.value?.trim();
-  const errEl = document.getElementById('auth-err');
-  if (!email || !email.includes('@')) {
-    if (errEl) errEl.textContent = 'Please enter a valid email';
-    return;
-  }
-  if (errEl) errEl.textContent = '';
-  if (!db) {
-    if (errEl) errEl.textContent = 'Supabase not configured — sign-in unavailable';
-    return;
-  }
-  const { error } = await db.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: window.location.origin }
+  const g = id => document.getElementById(id);
+  g('sb-ac').onclick   = () => { modal.style.display = 'none'; };
+  g('sb-atog').onclick = e  => { e.preventDefault(); _renderAuthModal(modal, isSignUp ? 'signin' : 'signup'); };
+
+  const submit = async () => {
+    const email = g('sb-ae').value.trim();
+    const pw    = g('sb-ap').value;
+    const errEl = g('sb-aerr');
+    errEl.textContent = '';
+
+    if (!email.includes('@'))  { errEl.textContent = 'Please enter a valid email address'; return; }
+    if (pw.length < 6)         { errEl.textContent = 'Password must be at least 6 characters'; return; }
+    if (isSignUp && pw !== g('sb-ap2')?.value) { errEl.textContent = 'Passwords do not match'; return; }
+
+    const btn = g('sb-asub');
+    btn.disabled    = true;
+    btn.textContent = isSignUp ? 'Creating account…' : 'Signing in…';
+
+    const err = isSignUp ? await signUp(email, pw) : await signIn(email, pw);
+    if (err) {
+      errEl.textContent = err;
+      btn.disabled    = false;
+      btn.textContent = isSignUp ? 'Create Account' : 'Sign In';
+    } else {
+      modal.style.display = 'none';
+    }
+  };
+
+  g('sb-asub').onclick = submit;
+  [g('sb-ae'), g('sb-ap'), g('sb-ap2')].forEach(el => {
+    el?.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
   });
-  if (error) {
-    if (errEl) errEl.textContent = error.message;
-    return;
-  }
-  const sentEl = document.getElementById('auth-sent');
-  if (sentEl) sentEl.style.display = 'block';
-  const inp = document.getElementById('auth-email-input');
-  if (inp) inp.disabled = true;
-}
 
-export async function syncOnBoot() {
-  const user = getSupaUser();
-  if (!user) return;
-  try {
-    const cloudDecks = await supaLoadDecks();
-    if (cloudDecks) {
-      const localDecks = lsLoad(KEYS.decks) || [];
-      const cloudIds = new Set(cloudDecks.map(d => d.id));
-      const localOnly = localDecks.filter(d => !cloudIds.has(d.id) && d.id !== 'builtin-mkt300');
-      const merged = cloudDecks.filter(d => d.id !== 'builtin-mkt300');
-      const localBuiltin = localDecks.find(d => d.id === 'builtin-mkt300');
-      const allDecks = localBuiltin ? [localBuiltin, ...merged, ...localOnly] : [...merged, ...localOnly];
-      saveDecks(allDecks);
-    }
-    const cloudMem = await supaLoadMemory();
-    if (cloudMem) {
-      const localMem = getMem();
-      const mergedMem = { ...localMem };
-      for (const [qid, cr] of Object.entries(cloudMem)) {
-        const lr = localMem[qid];
-        if (!lr || cr.total > lr.total) mergedMem[qid] = cr;
-      }
-      lsSave(KEYS.memory, mergedMem);
-      invalidateMemCache();
-    }
-  } catch (e) {
-    console.warn('Boot sync failed:', e);
-  }
+  // Escape closes modal
+  const onEsc = e => { if (e.key === 'Escape') { modal.style.display = 'none'; document.removeEventListener('keydown', onEsc); } };
+  document.addEventListener('keydown', onEsc);
+
+  setTimeout(() => g('sb-ae')?.focus(), 80);
 }
