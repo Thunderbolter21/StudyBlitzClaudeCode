@@ -24,8 +24,13 @@ export async function signUp(email, password) {
   if (!db) return 'Supabase not configured — running in local mode';
   const { data, error } = await db.auth.signUp({ email, password });
   if (error) return error.message;
-  if (data.session) await handlePostAuth(data.session, 'new');
-  return null; // null = success
+  if (data.session) {
+    // Email confirmation OFF — immediate session
+    await handlePostAuth(data.session, 'new');
+    return null; // null = close modal
+  }
+  // Email confirmation ON — account created, awaiting email click
+  return '__confirm_email__';
 }
 
 // ── Sign In ─────────────────────────────────────────────────────────────────
@@ -408,8 +413,27 @@ function _renderAuthModal(modal, mode) {
     btn.textContent = isSignUp ? 'Creating account…' : 'Signing in…';
 
     const err = isSignUp ? await signUp(email, pw) : await signIn(email, pw);
-    if (err) {
-      errEl.textContent = err;
+    if (err === '__confirm_email__') {
+      // Account created but email confirmation is required
+      const box = modal.querySelector('.modal-box');
+      if (box) box.innerHTML = `
+        <div style="text-align:center;padding:0.5rem 0;">
+          <div style="font-size:2rem;margin-bottom:0.8rem;">📬</div>
+          <h2 style="margin-bottom:0.6rem;">Check your email</h2>
+          <p style="color:var(--muted);font-size:0.88rem;line-height:1.6;margin-bottom:1.4rem;">
+            We sent a confirmation link to<br>
+            <strong style="color:var(--text);">${email}</strong><br><br>
+            Click it to activate your account, then sign in here.
+          </p>
+          <button class="btn btn-primary" style="width:100%;justify-content:center;"
+            onclick="document.getElementById('sb-auth-modal').style.display='none'">Got it</button>
+        </div>`;
+    } else if (err) {
+      // Friendlier message for the most common sign-in failure
+      const friendly = err.toLowerCase().includes('not confirmed')
+        ? 'Email not confirmed yet — check your inbox for the confirmation link.'
+        : err;
+      errEl.textContent = friendly;
       btn.disabled    = false;
       btn.textContent = isSignUp ? 'Create Account' : 'Sign In';
     } else {
