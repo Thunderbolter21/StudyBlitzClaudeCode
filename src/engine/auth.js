@@ -306,20 +306,28 @@ function _updateNavAuth() {
       btnEl.onclick = () => openAuthModal();
     }
   }
-  // Sync status line (only shown when logged in)
-  let syncEl = document.getElementById('sb-sync-status');
-  if (!syncEl && user) {
-    syncEl = document.createElement('div');
-    syncEl.id = 'sb-sync-status';
-    syncEl.style.cssText = 'font-size:0.68rem;padding:0.1rem 0 0.3rem;';
-    statusEl.insertAdjacentElement('afterend', syncEl);
-  }
+  // Show/hide sync status (element now lives in HTML)
+  const syncEl = document.getElementById('sb-sync-status');
   if (syncEl) syncEl.style.display = user ? '' : 'none';
 }
 
 function _updateBanner() {
   const banner = document.getElementById('sb-auth-banner');
-  if (banner) banner.style.display = isLoggedIn() ? 'none' : 'flex';
+  if (!banner) return;
+
+  const dismissed = sessionStorage.getItem('sb-banner-dismissed');
+  banner.style.display = (isLoggedIn() || dismissed) ? 'none' : 'flex';
+
+  // Wire buttons once (use onclick so re-calling never stacks listeners)
+  const signinBtn  = document.getElementById('sb-banner-signin');
+  const signupBtn  = document.getElementById('sb-banner-signup');
+  const dismissBtn = document.getElementById('sb-banner-dismiss');
+  if (signinBtn)  signinBtn.onclick  = () => openAuthModal('signin');
+  if (signupBtn)  signupBtn.onclick  = () => openAuthModal('signup');
+  if (dismissBtn) dismissBtn.onclick = () => {
+    sessionStorage.setItem('sb-banner-dismissed', '1');
+    banner.style.display = 'none';
+  };
 }
 
 function _updateSyncStatus(state) {

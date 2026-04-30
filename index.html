@@ -37,10 +37,11 @@
   <button class="nav-item" data-page="weak-spots"><span class="icon">🎯</span><span>Weak Spots</span></button>
   <div style="flex:1;"></div>
   <div style="padding:0.8rem 1.5rem;border-top:1px solid var(--border);">
+    <div id="auth-status" style="font-size:0.72rem;color:var(--muted);padding:0.2rem 0;"></div>
+    <div id="sb-sync-status" style="font-size:0.68rem;padding:0.1rem 0 0.25rem;display:none;"></div>
     <button class="nav-item" id="link-account-btn" style="color:var(--muted);font-size:0.78rem;padding:0.5rem 0;">
-      <span class="icon">🔗</span><span>Link Account (coming soon)</span>
+      <span class="icon">🔗</span><span>Sign In / Create Account</span>
     </button>
-    <div id="auth-status" style="font-size:0.72rem;color:var(--muted);padding:0.3rem 1.5rem;"></div>
   </div>
 </div>
 
@@ -53,6 +54,17 @@
       <h1>DASHBOARD</h1>
       <p>Your adaptive study command center</p>
     </div>
+
+    <!-- AUTH BANNER — guest only, hidden when signed in or dismissed -->
+    <div id="sb-auth-banner" style="display:none;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.6rem;padding:0.65rem 1.1rem;background:rgba(56,178,255,0.07);border:1px solid rgba(56,178,255,0.18);border-radius:var(--radius);margin-bottom:1.4rem;">
+      <span style="font-size:0.82rem;color:var(--muted);">☁️ Sign in to sync your decks across devices</span>
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-shrink:0;">
+        <button class="btn btn-ghost btn-sm" id="sb-banner-signin">Sign In</button>
+        <button class="btn btn-primary btn-sm" id="sb-banner-signup">Create Account</button>
+        <button class="btn btn-ghost btn-sm" id="sb-banner-dismiss" style="padding:0.2rem 0.5rem;opacity:0.5;" title="Dismiss">✕</button>
+      </div>
+    </div>
+
     <div class="stat-grid">
       <div class="stat-card clickable" style="--c:var(--accent)" onclick="openKnowledgeBreakdown()" title="Click to see your knowledge breakdown"><div class="stat-num" id="dash-total-q">0</div><div class="stat-lbl">Total Questions ↗</div></div>
       <div class="stat-card" style="--c:var(--green)"><div class="stat-num" id="dash-mastered">0</div><div class="stat-lbl">Mastered</div></div>
