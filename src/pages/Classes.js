@@ -4,6 +4,7 @@ import { getMem, getRec, isWeak } from '../engine/memory.js';
 import { getDecks, getDeckById, getDeckColor } from '../engine/decks.js';
 import { getClasses } from '../engine/classes.js';
 import { makeDeckCard } from '../components/DeckCard.js';
+import { QS, startQS } from '../engine/quiz.js';
 
 let _toast, _nav, _refreshAll, _refreshClasses;
 export function initClassesCallbacks({ toast, nav, refreshAll, refreshClasses }) {
@@ -175,9 +176,10 @@ export function drillClassMixed(classId, singleDeckId) {
     return;
   }
 
-  window.dispatchEvent(new CustomEvent('sb-start-drill', {
-    detail: { questions: weakQs, mode: 'drill', source: 'class', classId }
-  }));
+  QS.deck      = { id: 'class-drill-' + classId, name: 'Class Drill' };
+  QS.questions = weakQs.sort(() => Math.random() - 0.5);
+  QS.mode      = 'drill';
+  startQS();
 }
 
 /* ── Class quiz panel ─────────────────────────────────────── */

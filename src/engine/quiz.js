@@ -145,6 +145,21 @@ export function launchDrillAll() {
   startQS();
 }
 
+export function launchDrillDeck(deckId) {
+  const deck = getDecks().find(d => d.id === deckId);
+  if (!deck) return;
+  const mem  = getMem();
+  const weak = deck.questions.filter(q => isWeak(getRec(mem, q.id)));
+  if (!weak.length) {
+    if (_toast) _toast('No weak spots in this deck! 🎉');
+    return;
+  }
+  QS.deck      = deck;
+  QS.questions = weak.sort(() => Math.random() - 0.5);
+  QS.mode      = 'drill';
+  startQS();
+}
+
 export function launchDrillFromResults() {
   const resultsEl = document.getElementById('quiz-results');
   if (resultsEl) resultsEl.style.display = 'none';
