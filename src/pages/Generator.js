@@ -54,8 +54,16 @@ export function switchTab(tab) {
    PROMPT BUILDING
    ══════════════════════════════════════════════════════════ */
 
-export function buildPromptText(notesText, count) {
+export function buildPromptText(notesText, count, instructionsText = '') {
   const deckName = document.getElementById('gen-name')?.value?.trim() || 'Study Deck';
+  const instr    = instructionsText.trim();
+  const instrBlock = instr
+    ? `\n--- SPECIAL INSTRUCTIONS FROM THE USER ---\n${instr}\nThese instructions override the defaults above where they conflict. Follow them precisely.\n--- END SPECIAL INSTRUCTIONS ---\n`
+    : '';
+  const notesBlock = notesText.trim()
+    ? `\n\nADDITIONAL NOTES FROM THE USER:\n${notesText.trim()}`
+    : '';
+  const studyMaterial = notesText.trim() || '(see attached files above)';
   return `You are a quiz question generator for a study app called StudyBlitz. Generate exactly ${count} multiple-choice quiz questions based on the study material below.
 
 SUBJECT/DECK: ${deckName}
@@ -74,9 +82,10 @@ IMPORTANT: Respond with ONLY a valid JSON array (no markdown, no code fences, no
 - "opts" (array of 4 strings): the answer options
 - "ans" (number 0-3): index of the correct answer
 - "explain" (string): brief explanation of the correct answer
-
+${instrBlock}
+---
 STUDY MATERIAL:
-${notesText}
+${studyMaterial}${notesBlock}
 
 Remember: Output ONLY the JSON array, nothing else.`;
 }
@@ -94,7 +103,7 @@ export function copyPromptForClaude() {
     return;
   }
 
-  const prompt = buildPromptText(notesText, count);
+  const prompt = buildPromptText(notesText, count, getInstructionsText());
 
   // Check for attached files that need special handling
   const imageFiles = attachedFiles.filter(f => f.type.startsWith('image/'));
@@ -188,7 +197,7 @@ export function showFileUploadInstructions(imageFiles, pdfFiles, notesText, deck
   `;
   modal.style.display = 'flex';
 
-  const prompt = buildPromptText(notesText || '(see attached files)', count);
+  const prompt = buildPromptText(notesText || '(see attached files)', count, getInstructionsText());
   document.getElementById('fu-copy-prompt').onclick = () => {
     navigator.clipboard.writeText(prompt).then(() => {
       if (_toast) _toast('Prompt copied!');
@@ -645,7 +654,7 @@ export async function generateDeck() {
   if (statusText) statusText.textContent = 'Generating quiz questions...';
   if (genBtn) genBtn.disabled = true;
 
-  const prompt = buildPromptText(notesText, count);
+  const prompt = buildPromptText(notesText, count, getInstructionsText());
 
   // Build messages array
   const messages = [{ role: 'user', content: [] }];
@@ -845,6 +854,8 @@ function _resetGeneratorUI() {
   if (nameEl)    nameEl.value    = '';
   if (notesEl)   notesEl.value   = '';
   if (importBox) importBox.value = '';
+  const instrEl = document.getElementById('gen-instructions');
+  if (instrEl)   instrEl.value   = '';
   attachedFiles = [];
   renderFileList();
   clearImport();
@@ -1030,4 +1041,8 @@ function getNotesText() {
   const extra = extraNotesEl?.value?.trim() || '';
   if (extra) text = text ? text + '\n\n' + extra : extra;
   return text;
+}
+
+function getInstructionsText() {
+  return document.getElementById('gen-instructions')?.value?.trim() || '';
 }

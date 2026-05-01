@@ -222,9 +222,17 @@
             <div id="file-items" style="display:flex;flex-direction:column;gap:0.5rem;"></div>
           </div>
           <div id="file-text-area" style="display:none;margin-top:1rem;">
-            <label>Additional Notes (optional)</label>
-            <textarea id="gen-notes-extra" style="min-height:70px;" placeholder="Extra context to combine with your files…"></textarea>
+            <label>📝 Supplementary Notes</label>
+            <p style="font-size:0.75rem;color:var(--muted);margin:0.15rem 0 0.5rem 0;line-height:1.4;">Extra written context to accompany your uploaded files. Add definitions, clarifications, or anything not covered in the PDFs.</p>
+            <textarea id="gen-notes-extra" style="min-height:80px;resize:vertical;" placeholder="e.g. Chapter 3 focuses on marginal cost curves. The professor emphasized the difference between accounting profit and economic profit…"></textarea>
           </div>
+        </div>
+
+        <!-- TEST INSTRUCTIONS (always visible, applies to both tabs) -->
+        <div style="margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--border);">
+          <label>⚙️ Test Instructions</label>
+          <p style="font-size:0.75rem;color:var(--muted);margin:0.15rem 0 0.5rem 0;line-height:1.4;">Direct instructions to Claude about how to structure this quiz. These are sent straight to the AI — be specific.</p>
+          <textarea id="gen-instructions" style="min-height:80px;resize:vertical;" placeholder="e.g. Focus heavily on in-practice application questions. Include exactly 5 free response questions. Avoid pure definition questions — I already know the terms. Make 2 questions that reference the aggregate demand curve. Weight questions toward the topics covered in weeks 8-10."></textarea>
         </div>
 
         <div style="display:flex;align-items:center;gap:1rem;margin-top:0.5rem;flex-wrap:wrap;">
