@@ -2,6 +2,7 @@
 
 import { KEYS, DECK_COLORS } from '../config.js';
 import { getDecks, saveDecks, getDeckColor } from '../engine/decks.js';
+import { getClasses, saveClasses } from '../engine/classes.js';
 import { supaSaveDeck } from '../engine/storage.js';
 
 let _toast, _nav, _refreshAll;
@@ -806,53 +807,47 @@ export function saveDeck() {
     return;
   }
 
-  const decks = getDecks();
-  const colorIndex = decks.length % DECK_COLORS.length;
+  const decks    = getDecks();
   const deckName = generatedDeckMeta.name || document.getElementById('gen-name')?.value?.trim() || 'New Deck';
-  const deckId = 'deck-' + Date.now();
 
   const newDeck = {
-    id: deckId,
-    name: deckName,
-    subject: deckName,
-    color: DECK_COLORS[colorIndex],
-    created: new Date().toISOString(),
+    id:        'deck-' + Date.now(),
+    name:      deckName,
+    subject:   deckName,
+    color:     DECK_COLORS[decks.length % DECK_COLORS.length],
+    created:   new Date().toISOString(),
     lastScore: null,
     questions: generatedQuestions
   };
 
-  decks.push(newDeck);
-  saveDecks(decks);
+  // Show class assignment modal BEFORE writing to storage
+  openPreSaveClassModal(newDeck, (finalDeck) => {
+    const latest = getDecks();
+    latest.push(finalDeck);
+    saveDecks(latest);
+    supaSaveDeck(finalDeck);
+    if (_toast) _toast(`✓ "${finalDeck.name}" saved to library!`);
+    _resetGeneratorUI();
+    if (_refreshAll) _refreshAll();
+  });
+}
 
-  // Also sync to Supabase
-  supaSaveDeck(newDeck);
-
-  if (_toast) _toast(`Deck "${deckName}" saved with ${generatedQuestions.length} questions!`);
-
-  // Reset state
+function _resetGeneratorUI() {
   generatedQuestions = [];
-  generatedDeckMeta = {};
+  generatedDeckMeta  = {};
   const previewCard = document.getElementById('preview-card');
-  const saveBtn = document.getElementById('gen-save-btn');
+  const saveBtn     = document.getElementById('gen-save-btn');
   if (previewCard) previewCard.style.display = 'none';
-  if (saveBtn) saveBtn.style.display = 'none';
-
-  // Clear inputs
-  const nameEl = document.getElementById('gen-name');
-  const notesEl = document.getElementById('gen-notes');
+  if (saveBtn)     saveBtn.style.display     = 'none';
+  const nameEl    = document.getElementById('gen-name');
+  const notesEl   = document.getElementById('gen-notes');
   const importBox = document.getElementById('json-import-box');
-  if (nameEl) nameEl.value = '';
-  if (notesEl) notesEl.value = '';
+  if (nameEl)    nameEl.value    = '';
+  if (notesEl)   notesEl.value   = '';
   if (importBox) importBox.value = '';
   attachedFiles = [];
   renderFileList();
-
   clearImport();
-
-  if (_refreshAll) _refreshAll();
-
-  // Prompt class assignment
-  promptClassAssignment(deckId);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -869,11 +864,158 @@ export function adjGenCount(d) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   CLASS ASSIGNMENT AFTER SAVE
+   PRE-SAVE CLASS ASSIGNMENT MODAL
+   ══════════════════════════════════════════════════════════ */
+
+export function openPreSaveClassModal(deckData, onComplete) {
+  let selectedClassId = null;
+  let resolved        = false;
+
+  const existing = document.getElementById('presave-class-modal');
+  if (existing) existing.remove();
+
+  const ov = document.createElement('div');
+  ov.id        = 'presave-class-modal';
+  ov.className = 'modal-overlay';
+  ov.style.display = 'flex';
+  document.body.appendChild(ov);
+
+  const doSave = () => {
+    if (resolved) return;
+    resolved = true;
+    if (selectedClassId) {
+      const cls = getClasses().find(c => c.id === selectedClassId);
+      if (cls) { deckData.classId = cls.id; deckData.color = cls.color; }
+    }
+    ov.remove();
+    document.removeEventListener('keydown', _onEsc);
+    onComplete(deckData);
+  };
+
+  const _onEsc = e => { if (e.key === 'Escape') doSave(); };
+  document.addEventListener('keydown', _onEsc);
+  ov.onclick = e => { if (e.target === ov) doSave(); };
+
+  const renderPicker = () => {
+    const classes = getClasses();
+    const decks   = getDecks();
+
+    const cards = classes.map(cls => {
+      const n   = decks.filter(d => d.classId === cls.id).length;
+      const sel = cls.id === selectedClassId;
+      const bg  = sel ? cls.color + '14' : 'var(--surface)';
+      const bdr = sel ? cls.color : 'var(--border)';
+      return `<div class="psc-card" data-cid="${cls.id}"
+        style="background:${bg};border:1.5px solid ${bdr};border-radius:10px;padding:0.75rem 0.9rem;cursor:pointer;transition:all 0.15s;position:relative;">
+        ${sel ? `<span style="position:absolute;top:0.4rem;right:0.55rem;color:${cls.color};font-size:0.8rem;font-weight:700;">✓</span>` : ''}
+        <div style="display:flex;align-items:center;gap:0.55rem;">
+          <span style="width:10px;height:10px;border-radius:50%;background:${cls.color};flex-shrink:0;"></span>
+          <span style="font-size:0.86rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cls.name}</span>
+        </div>
+        <div style="font-size:0.68rem;color:var(--muted);margin-top:0.2rem;padding-left:1.4rem;">${n} deck${n !== 1 ? 's' : ''}</div>
+      </div>`;
+    }).join('');
+
+    const selCls  = classes.find(c => c.id === selectedClassId);
+    const saveLbl = selCls ? `Save to ${selCls.name}` : 'Save to Class';
+    const dis     = !selectedClassId;
+
+    ov.innerHTML = `
+      <div class="modal-box" style="max-width:480px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.25rem;">
+          <h2 style="margin:0;">🎓 Assign to a Class</h2>
+          <button class="btn btn-ghost" id="psc-x" style="padding:0.3rem 0.6rem;font-size:1rem;">✕</button>
+        </div>
+        <div style="font-size:0.82rem;color:var(--muted);margin-bottom:1.1rem;">${deckData.name}</div>
+
+        ${classes.length === 0
+          ? `<div style="text-align:center;padding:1.5rem 0 0.5rem;color:var(--muted);font-size:0.85rem;">No classes yet</div>`
+          : `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.55rem;max-height:300px;overflow-y:auto;margin-bottom:0.9rem;">${cards}</div>`}
+
+        <button class="btn btn-ghost btn-sm" id="psc-new"
+          style="width:100%;justify-content:center;margin-bottom:1rem;">
+          + Create New Class
+        </button>
+
+        <div style="display:flex;gap:0.8rem;flex-wrap:wrap;">
+          <button class="btn btn-primary" id="psc-save"
+            style="flex:1;justify-content:center;min-width:120px;${dis ? 'opacity:0.4;pointer-events:none;' : ''}"
+            ${dis ? 'disabled' : ''}>${saveLbl}</button>
+          <button class="btn btn-ghost" id="psc-skip" style="white-space:nowrap;">Skip for now</button>
+        </div>
+      </div>`;
+
+    document.getElementById('psc-x').onclick    = () => doSave();
+    document.getElementById('psc-skip').onclick = () => doSave();
+    document.getElementById('psc-save').onclick = () => { if (selectedClassId) doSave(); };
+    document.getElementById('psc-new').onclick  = () => renderCreateForm();
+
+    ov.querySelectorAll('.psc-card').forEach(card => {
+      card.onclick = () => { selectedClassId = card.dataset.cid; renderPicker(); };
+    });
+  };
+
+  const renderCreateForm = () => {
+    const COLS = ['#ff3f6c','#ffc94a','#00e5a0','#38b2ff','#b57bee','#ff8c42','#06d6a0','#ef476f'];
+    let picked = COLS[0];
+
+    const swatch = COLS.map(c =>
+      `<span data-c="${c}" style="width:26px;height:26px;border-radius:50%;background:${c};cursor:pointer;flex-shrink:0;
+        border:2.5px solid ${c === picked ? '#fff' : 'transparent'};transition:border-color 0.15s;"></span>`
+    ).join('');
+
+    ov.innerHTML = `
+      <div class="modal-box" style="max-width:480px;">
+        <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:1.2rem;">
+          <button class="btn btn-ghost btn-sm" id="psc-back" style="padding:0.3rem 0.65rem;">← Back</button>
+          <h2 style="margin:0;font-size:1rem;">New Class</h2>
+        </div>
+        <label class="lbl-s">Class Name</label>
+        <input type="text" id="psc-cname" placeholder="e.g. Biology 101" style="margin-bottom:1rem;" />
+        <label class="lbl-s">Color</label>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">${swatch}</div>
+        <div id="psc-cerr" style="font-size:0.78rem;color:var(--accent);min-height:1rem;margin-bottom:0.7rem;"></div>
+        <div style="display:flex;gap:0.8rem;">
+          <button class="btn btn-primary" id="psc-ccreate">Create Class</button>
+          <button class="btn btn-ghost"   id="psc-ccancel">Cancel</button>
+        </div>
+      </div>`;
+
+    document.getElementById('psc-back').onclick    = () => renderPicker();
+    document.getElementById('psc-ccancel').onclick = () => renderPicker();
+
+    ov.querySelectorAll('[data-c]').forEach(sw => {
+      sw.onclick = () => {
+        picked = sw.dataset.c;
+        ov.querySelectorAll('[data-c]').forEach(s => s.style.borderColor = 'transparent');
+        sw.style.borderColor = '#fff';
+      };
+    });
+
+    document.getElementById('psc-ccreate').onclick = () => {
+      const name  = document.getElementById('psc-cname')?.value.trim();
+      const errEl = document.getElementById('psc-cerr');
+      if (!name) { errEl.textContent = 'Enter a class name'; return; }
+      const classes = getClasses();
+      const newCls  = { id: 'cls-' + Date.now(), name, color: picked };
+      classes.push(newCls);
+      saveClasses(classes);
+      if (_refreshAll) _refreshAll();
+      selectedClassId = newCls.id;
+      renderPicker();
+    };
+
+    setTimeout(() => document.getElementById('psc-cname')?.focus(), 80);
+  };
+
+  renderPicker();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   CLASS ASSIGNMENT (legacy — kept for external callers)
    ══════════════════════════════════════════════════════════ */
 
 export function promptClassAssignment(deckId) {
-  // Dispatch event for class assignment modal
   window.dispatchEvent(new CustomEvent('sb-assign-class', { detail: { deckId } }));
 }
 
