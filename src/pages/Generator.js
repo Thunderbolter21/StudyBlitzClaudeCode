@@ -460,7 +460,7 @@ export function saveApiKey() {
   storeApiKey(key);
   closeApiModal();
   updateKeyBadge();
-  if (_toast) _toast('API key saved!');
+  if (_toast) _toast('✅ API key saved');
 }
 
 export function updateKeyBadge() {

@@ -107,6 +107,7 @@ input[type=text],textarea,select{width:100%;background:var(--surface);border:1px
 input[type=text]:focus,textarea:focus,select:focus{border-color:var(--accent);}
 textarea{resize:vertical;min-height:120px;line-height:1.6;}
 select option{background:var(--surface);}
+select:disabled{opacity:0.4;cursor:not-allowed;}
 
 /* ── DASHBOARD ── */
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem;}
