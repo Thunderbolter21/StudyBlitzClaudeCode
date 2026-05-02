@@ -422,13 +422,64 @@ export function storeApiKey(k) {
   try { localStorage.setItem(KEYS.apiKey, k); } catch (e) {}
 }
 
+function maskKey(key) {
+  if (!key || key.length < 8) return '••••••••';
+  return 'sk-ant-' + '•'.repeat(20) + key.slice(-4);
+}
+
 export function openApiModal() {
   const modal = document.getElementById('api-modal');
-  if (modal) {
-    modal.style.display = 'flex';
-    const input = document.getElementById('api-key-input');
-    if (input) input.value = getApiKey();
+  if (!modal) return;
+  const existingKey = getApiKey();
+  const hasKey = !!existingKey;
+  const box = modal.querySelector('.modal-box');
+  if (hasKey) {
+    box.innerHTML = `
+      <h2>🔑 API Key Connected</h2>
+      <p>Your Claude API key is saved. Paste a new key below to replace it, or remove it entirely.</p>
+      <label>Current Key</label>
+      <div style="font-family:monospace;font-size:0.82rem;color:var(--green);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.6rem 1rem;margin-bottom:1rem;">${maskKey(existingKey)}</div>
+      <label>Replace Key</label>
+      <div class="api-key-row">
+        <input type="password" id="api-key-input" placeholder="Paste new key to replace..." autocomplete="off" onkeydown="if(event.key==='Enter')saveApiKey()">
+        <button class="btn btn-ghost btn-sm" onclick="toggleKeyVis()" id="key-vis-btn" style="flex-shrink:0;">Show</button>
+      </div>
+      <div style="display:flex;gap:0.8rem;flex-wrap:wrap;margin-top:1rem;">
+        <button class="btn btn-primary" onclick="saveApiKey()">Save New Key</button>
+        <button class="btn btn-ghost" style="color:var(--accent);border-color:var(--accent);" onclick="removeApiKey()">Remove Key</button>
+        <button class="btn btn-ghost" onclick="closeApiModal()">Cancel</button>
+      </div>`;
+  } else {
+    box.innerHTML = `
+      <h2>🔑 Connect to Claude</h2>
+      <p>StudyBlitz uses the Claude API to generate quiz questions from your notes and files. You need a free Anthropic API key to use the Quiz Builder.</p>
+      <div class="api-steps">
+        <span><b>1</b> Go to <a href="https://console.anthropic.com" target="_blank" style="color:var(--blue);">console.anthropic.com</a> and sign up free</span>
+        <span><b>2</b> Click <strong>API Keys</strong> in the left sidebar → <strong>Create Key</strong></span>
+        <span><b>3</b> Copy your key (starts with <code style="color:var(--gold);font-size:0.8rem;">sk-ant-</code>) and paste it below</span>
+      </div>
+      <label>Your API Key</label>
+      <div class="api-key-row">
+        <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." autocomplete="off" onkeydown="if(event.key==='Enter')saveApiKey()">
+        <button class="btn btn-ghost btn-sm" onclick="toggleKeyVis()" id="key-vis-btn" style="flex-shrink:0;">Show</button>
+      </div>
+      <div class="modal-note" style="margin-bottom:1.2rem;">
+        🔒 Your key is stored only in <strong>this browser's localStorage</strong> — it never leaves your device except to call Anthropic's API directly.<br>
+        New users get free credits. Pricing: ~$0.003 per quiz deck generated. <a href="https://www.anthropic.com/pricing" target="_blank">See pricing →</a>
+      </div>
+      <div style="display:flex;gap:0.8rem;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="saveApiKey()">Save Key & Continue</button>
+        <button class="btn btn-ghost" onclick="closeApiModal()">Cancel</button>
+      </div>`;
   }
+  modal.style.display = 'flex';
+}
+
+export function removeApiKey() {
+  try { localStorage.removeItem(KEYS.apiKey); } catch (e) {}
+  closeApiModal();
+  updateKeyBadge();
+  if (_toast) _toast('🗑️ API key removed');
 }
 
 export function closeApiModal() {

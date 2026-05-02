@@ -57,6 +57,15 @@ export function refreshQuizSelect() {
     list.appendChild(wrap);
   });
 
+  if (!decks.some(d => !d.builtIn)) {
+    const nudge = document.createElement('div');
+    nudge.style.cssText = 'text-align:center;padding:1rem 0.5rem;';
+    nudge.innerHTML = `
+      <p style="font-size:0.82rem;color:var(--muted);margin-bottom:0.6rem;">No custom decks yet</p>
+      <button class="btn btn-primary btn-sm" onclick="nav('generator')">🛠️ Build your first deck</button>`;
+    list.appendChild(nudge);
+  }
+
   const hint = document.getElementById('qs-count-hint');
   if (hint) {
     const selDeck = selectedDeckId ? getDeckById(selectedDeckId) : null;

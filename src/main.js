@@ -29,7 +29,7 @@ import { refreshWeakSpots, initWeakSpotsCallbacks } from './pages/WeakSpots.js';
 import {
   switchMethod, copyPromptForClaude, importFromJson, clearImport, generateDeck, saveDeck,
   adjGenCount, switchTab, setupDropZone, handleFiles,
-  openApiModal, closeApiModal, toggleKeyVis, saveApiKey, updateKeyBadge,
+  openApiModal, closeApiModal, toggleKeyVis, saveApiKey, removeApiKey, updateKeyBadge,
   promptClassAssignment, initGeneratorCallbacks
 } from './pages/Generator.js';
 
@@ -115,6 +115,7 @@ function exposeGlobals() {
   window.closeApiModal = closeApiModal;
   window.toggleKeyVis = toggleKeyVis;
   window.saveApiKey = saveApiKey;
+  window.removeApiKey = removeApiKey;
   window.toast = toast;
   window.openAuthModal = openAuthModal;
 }
