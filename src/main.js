@@ -85,6 +85,7 @@ function exposeGlobals() {
   window.onModeChange = onModeChange;
   window.adjQCount = adjQCount;
   window.adjGenCount = adjGenCount;
+  window.QS = QS;
   window.launchQuiz = launchQuiz;
   window.launchDrillAll = launchDrillAll;
   window.launchDrillFromResults = launchDrillFromResults;
