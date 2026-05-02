@@ -2,7 +2,7 @@
 
 import { KEYS } from '../config.js';
 import { load, save } from './storage.js';
-import { getMem, setMem, getRec, updateRec, isWeak, isMastered, drillCleared, weightedSample } from './memory.js';
+import { getMem, setMem, getRec, updateRec, isWeak, isMastered, drillCleared, isDue, weightedSample } from './memory.js';
 import { getDecks, getDeckById, getDeckColor, saveDecks } from './decks.js';
 import { getClasses } from './classes.js';
 
@@ -166,6 +166,47 @@ export function launchDrillFromResults() {
   launchDrillAll();
 }
 
+export function launchReviewAll() {
+  const decks = getDecks();
+  const mem = getMem();
+  const seen = new Set();
+  const cards = [];
+  decks.forEach(d => {
+    (d.questions || []).forEach(q => {
+      if (!seen.has(q.id) && isDue(getRec(mem, q.id))) {
+        seen.add(q.id);
+        cards.push(q);
+      }
+    });
+  });
+  if (!cards.length) { _toast?.('No cards due for review! 🎉'); return; }
+  QS.deck = { id: 'review-all', name: 'SM-2 Review' };
+  QS.questions = cards.sort(() => Math.random() - 0.5);
+  QS.mode = 'drill';
+  startQS();
+}
+
+export function launchReviewClass(classId) {
+  const decks = getDecks().filter(d => d.classId === classId);
+  const mem = getMem();
+  const seen = new Set();
+  const cards = [];
+  decks.forEach(d => {
+    (d.questions || []).forEach(q => {
+      if (!seen.has(q.id) && isDue(getRec(mem, q.id))) {
+        seen.add(q.id);
+        cards.push(q);
+      }
+    });
+  });
+  if (!cards.length) { _toast?.('No cards due in this class! 🎉'); return; }
+  const cls = getClasses().find(c => c.id === classId);
+  QS.deck = { id: `review-class-${classId}`, name: cls ? `${cls.name} — Review` : 'Class Review' };
+  QS.questions = cards.sort(() => Math.random() - 0.5);
+  QS.mode = 'drill';
+  startQS();
+}
+
 // ══════════════════════════════════════════════
 //  QUIZ SESSION
 // ══════════════════════════════════════════════
@@ -193,7 +234,7 @@ export function startQS() {
   const fixArea = document.getElementById('q-fix-area');
   if (fixArea) fixArea.innerHTML = '';
 
-  if (QS.deck && QS.deck.id && QS.deck.id !== 'drill-all' && !QS.deck.id.startsWith('drill-class-')) {
+  if (QS.deck && QS.deck.id && QS.deck.id !== 'drill-all' && !QS.deck.id.startsWith('drill-class-') && !QS.deck.id.startsWith('review-')) {
     save(KEYS.recentDeck, { id: QS.deck.id, deckId: QS.deck.id, mode: QS.mode, tcSecs: QS.tcSecs || 60 });
   }
 

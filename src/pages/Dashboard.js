@@ -5,7 +5,8 @@ import { getDecks, getDeckById, getDeckColor } from '../engine/decks.js';
 import { getClasses } from '../engine/classes.js';
 import { load } from '../engine/storage.js';
 import { KEYS } from '../config.js';
-import { QS, quickStartDeck, drillDeck, startQS, launchExam } from '../engine/quiz.js';
+import { QS, quickStartDeck, drillDeck, startQS, launchExam, launchReviewAll, launchReviewClass } from '../engine/quiz.js';
+import { makeModal } from '../components/Modals.js';
 
 let _nav;
 export function initDashboardCallbacks({ nav }) {
@@ -223,8 +224,48 @@ function _renderReviewCallout(dueCards, byClass) {
 }
 
 /* ── openReviewModal ──────────────────────────────────────── */
-// Step 03 fills in the modal body; this stub keeps the wiring intact.
-export function openReviewModal() {}
+export function openReviewModal() {
+  const decks = getDecks();
+  const classes = getClasses();
+  const dueCards = getDueCards(decks);
+  const byClass  = getOverdueByClass(decks, classes);
+
+  if (!dueCards.length) return;
+
+  const count = dueCards.length;
+
+  const classRowsHtml = byClass.size > 0
+    ? `<div style="margin-top:1rem;">
+        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:0.5rem;">Or review by class</div>
+        ${[...byClass.values()].map(({ cls, count: n }) =>
+          `<button class="class-sub-item" data-cls="${cls.id}"
+            style="padding:0.6rem 1rem;border-radius:10px;border:1px solid var(--border);background:var(--surface);margin-bottom:0.4rem;width:100%;text-align:left;font-family:'Sora',sans-serif;font-size:0.84rem;cursor:pointer;color:var(--text);display:flex;align-items:center;gap:0.6rem;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${cls.color};flex-shrink:0;"></span>
+            <span style="flex:1;">${cls.name}</span>
+            <span style="color:var(--muted);font-size:0.73rem;">${n} card${n !== 1 ? 's' : ''}</span>
+          </button>`
+        ).join('')}
+      </div>`
+    : '';
+
+  const ov = makeModal('review-modal');
+  ov.innerHTML = `
+    <div class="modal-box">
+      <h2>📅 Review Now</h2>
+      <p>${count} card${count !== 1 ? 's' : ''} due for review</p>
+      <button class="btn btn-primary" id="review-all-btn" style="width:100%;margin-top:0.5rem;">&#9654; Review All</button>
+      ${classRowsHtml}
+      <div style="margin-top:1rem;">
+        <button class="btn btn-ghost btn-sm" id="review-cancel-btn">Cancel</button>
+      </div>
+    </div>`;
+
+  ov.querySelector('#review-all-btn').onclick = () => { ov.remove(); launchReviewAll(); };
+  ov.querySelector('#review-cancel-btn').onclick = () => ov.remove();
+  ov.querySelectorAll('[data-cls]').forEach(btn => {
+    btn.onclick = () => { ov.remove(); launchReviewClass(btn.dataset.cls); };
+  });
+}
 
 /* ── relaunchRecent ───────────────────────────────────────── */
 export function relaunchRecent() {

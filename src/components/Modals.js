@@ -13,7 +13,7 @@ export function initModalCallbacks({ toast, refreshAll, deleteDeck }) {
 }
 
 // ── Shared modal factory ──
-function makeModal(id) {
+export function makeModal(id) {
   const existing = document.getElementById(id);
   if (existing) existing.remove();
   const ov = document.createElement('div');
