@@ -28,28 +28,56 @@ export function getRec(mem, id) {
   return r;
 }
 
+// Returns SM-2 quality score 1–5 based on correctness + response speed.
+// Uses p33/p66 of the question's own correct-answer history.
+// Falls back to binary (4/1) when timing is unavailable or history is thin.
+function computeQuality(r, wasCorrect, answerTimeMs) {
+  if (!answerTimeMs || answerTimeMs <= 0) return wasCorrect ? 4 : 1;
+
+  const correctTimes = (r.responseTimes || [])
+    .filter(e => e.correct && e.ms > 0)
+    .map(e => e.ms)
+    .sort((a, b) => a - b);
+
+  if (correctTimes.length < 3) return wasCorrect ? 4 : 1;
+
+  const p33 = correctTimes[Math.floor(correctTimes.length * 0.33)];
+  const p66 = correctTimes[Math.floor(correctTimes.length * 0.66)];
+
+  if (wasCorrect) {
+    if (answerTimeMs <= p33) return 5; // fast correct  → very confident
+    if (answerTimeMs <= p66) return 4; // normal correct → solid
+    return 3;                          // slow correct   → hesitant
+  }
+  return 1; // wrong (fast or slow — both reset; confidence tracked separately)
+}
+
 export function updateRec(mem, id, wasCorrect, answerTimeMs = null) {
   const r = getRec(mem, id);
   r.total++;
   r.lastResult = wasCorrect ? 'correct' : 'wrong';
 
+  // Store timing BEFORE computeQuality so the current answer is in the pool.
   r.responseTimes = r.responseTimes || [];
   if (answerTimeMs && answerTimeMs > 0 && answerTimeMs < 60000) {
     r.responseTimes.push({ ms: answerTimeMs, correct: wasCorrect, ts: Date.now() });
     if (r.responseTimes.length > 20) r.responseTimes = r.responseTimes.slice(-20);
   }
 
-  if (wasCorrect) {
-    r.correct++;
-    const quality = 5;
+  // Raw correct/total counters (unchanged — used for display).
+  if (wasCorrect) r.correct++;
+  else r.everWrong = true;
+
+  // Quality-based SM-2: q5=fast-correct q4=normal q3=hesitant q1=wrong.
+  const q = computeQuality(r, wasCorrect, answerTimeMs);
+
+  if (q >= 3) {
     r.reps++;
     if (r.reps === 1) r.interval = 1;
     else if (r.reps === 2) r.interval = 6;
     else r.interval = Math.round(r.interval * r.ease);
-    r.ease = r.ease + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
-    if (r.ease < 1.3) r.ease = 1.3;
+    r.ease = Math.max(1.3, r.ease + 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
   } else {
-    r.everWrong = true;
     r.reps = 0;
     r.interval = 1;
     r.ease = Math.max(1.3, r.ease - 0.2);

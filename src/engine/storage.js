@@ -69,13 +69,16 @@ export async function supaLoadMemory() {
   if (!_supaUser) return null;
   const { data, error } = await withTimeout(db.from('memory').select('*').eq('user_id', _supaUser.id));
   if (error) { console.warn('supaLoadMemory error', error); return null; }
+  const localMem = lsLoad(KEYS.memory) || {};
   const mem = {};
   data.forEach(r => {
+    const existing = localMem[r.question_id] || {};
     mem[r.question_id] = {
       correct: r.correct, total: r.total,
       everWrong: r.ever_wrong, lastResult: r.last_result,
       interval: r.interval || 1, ease: r.ease || 2.5,
-      due: r.due || 0, reps: r.reps || 0
+      due: r.due || 0, reps: r.reps || 0,
+      responseTimes: existing.responseTimes || []
     };
   });
   return mem;
