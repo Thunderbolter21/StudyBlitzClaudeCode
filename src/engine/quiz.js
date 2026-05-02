@@ -2,7 +2,7 @@
 
 import { KEYS } from '../config.js';
 import { load, save } from './storage.js';
-import { getMem, setMem, getRec, updateRec, isWeak, isMastered, drillCleared, isDue, weightedSample } from './memory.js';
+import { getMem, setMem, getRec, updateRec, isWeak, isMastered, drillCleared, isDue, weightedSample, interleaveQuestions } from './memory.js';
 import { getDecks, getDeckById, getDeckColor, saveDecks } from './decks.js';
 import { getClasses } from './classes.js';
 
@@ -57,6 +57,7 @@ export function quickStartDeck(deckId) {
   const n = Math.min(20, deck.questions.length);
   QS.deck = deck;
   QS.questions = weightedSample(deck.questions, mem, n);
+  QS.questions = interleaveQuestions(QS.questions, mem);
   QS.mode = 'standard';
   startQS();
 }
@@ -72,6 +73,7 @@ export function drillDeck(deckId) {
   }
   QS.deck = deck;
   QS.questions = weak.sort(() => Math.random() - 0.5);
+  QS.questions = interleaveQuestions(QS.questions, mem);
   QS.mode = 'drill';
   startQS();
 }
@@ -97,6 +99,7 @@ export function launchQuiz() {
     }
     QS.deck = deck;
     QS.questions = weak.sort(() => Math.random() - 0.5);
+    QS.questions = interleaveQuestions(QS.questions, mem);
     QS.mode = 'drill';
     startQS();
     return;
@@ -118,6 +121,7 @@ export function launchQuiz() {
   const n = countEl ? Math.min(parseInt(countEl.value) || 20, deck.questions.length) : Math.min(20, deck.questions.length);
   QS.deck = deck;
   QS.questions = weightedSample(deck.questions, mem, n);
+  QS.questions = interleaveQuestions(QS.questions, mem);
   QS.mode = mode;
   startQS();
 }
@@ -141,6 +145,7 @@ export function launchDrillAll() {
   }
   QS.deck = { id: 'all-weak', name: 'All Weak Spots' };
   QS.questions = weak.sort(() => Math.random() - 0.5);
+  QS.questions = interleaveQuestions(QS.questions, mem);
   QS.mode = 'drill';
   startQS();
 }
@@ -156,6 +161,7 @@ export function launchDrillDeck(deckId) {
   }
   QS.deck      = deck;
   QS.questions = weak.sort(() => Math.random() - 0.5);
+  QS.questions = interleaveQuestions(QS.questions, mem);
   QS.mode      = 'drill';
   startQS();
 }
@@ -182,6 +188,7 @@ export function launchReviewAll() {
   if (!cards.length) { _toast?.('No cards due for review! 🎉'); return; }
   QS.deck = { id: 'review-all', name: 'SM-2 Review' };
   QS.questions = cards.sort(() => Math.random() - 0.5);
+  QS.questions = interleaveQuestions(QS.questions, mem);
   QS.mode = 'drill';
   startQS();
 }
@@ -203,6 +210,7 @@ export function launchReviewClass(classId) {
   const cls = getClasses().find(c => c.id === classId);
   QS.deck = { id: `review-class-${classId}`, name: cls ? `${cls.name} — Review` : 'Class Review' };
   QS.questions = cards.sort(() => Math.random() - 0.5);
+  QS.questions = interleaveQuestions(QS.questions, mem);
   QS.mode = 'drill';
   startQS();
 }
@@ -725,6 +733,7 @@ export function replayQuiz() {
         const n = QS.questions.length;
         QS.questions = weightedSample(deck.questions, mem, n);
       }
+      QS.questions = interleaveQuestions(QS.questions, mem);
       QS.deck = deck;
       startQS();
       return;

@@ -99,6 +99,58 @@ export function getDueCount() {
   return count;
 }
 
+// Reorders a question array for cognitive interleaving:
+// Rule 1 — no same category back-to-back (takes priority).
+// Rule 2 — WEAK and STRONG questions alternate (WEAK → STRONG → ...).
+// mem=null/undefined treats all questions as STRONG.
+export function interleaveQuestions(questions, mem) {
+  if (questions.length <= 1) return questions;
+
+  const safeMem = mem || {};
+
+  const wQueue = [];
+  const sQueue = [];
+  questions.forEach(q => {
+    if (isWeak(getRec(safeMem, q.id))) wQueue.push(q);
+    else sQueue.push(q);
+  });
+
+  // Sort each bucket by category so same-cat items cluster together,
+  // making the round-robin category-preference step effective.
+  const byCat = (a, b) => (a.cat || '').localeCompare(b.cat || '');
+  wQueue.sort(byCat);
+  sQueue.sort(byCat);
+
+  // Picks from bucket preferring a different category than lastCat.
+  // Falls back to index 0 when no alternative exists (Rule 1 unavoidable).
+  function pick(bucket, lastCat) {
+    const idx = lastCat
+      ? bucket.findIndex(q => (q.cat || 'General') !== lastCat)
+      : 0;
+    return bucket.splice(idx >= 0 ? idx : 0, 1)[0];
+  }
+
+  const result = [];
+  let lastCat = null;
+  let lastWasWeak = false; // false → next pick comes from weak (WEAK→STRONG→WEAK…)
+
+  while (wQueue.length || sQueue.length) {
+    if (!lastWasWeak && wQueue.length) {
+      const q = pick(wQueue, lastCat);
+      result.push(q); lastCat = q.cat || 'General'; lastWasWeak = true;
+    } else if (sQueue.length) {
+      const q = pick(sQueue, lastCat);
+      result.push(q); lastCat = q.cat || 'General'; lastWasWeak = false;
+    } else {
+      // Strong exhausted — drain remaining weak with Rule 1 only.
+      const q = pick(wQueue, lastCat);
+      result.push(q); lastCat = q.cat || 'General';
+    }
+  }
+
+  return result;
+}
+
 export function weightedSample(pool, mem, n) {
   const now = Date.now();
   const overdue = [];

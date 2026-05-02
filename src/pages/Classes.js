@@ -1,6 +1,6 @@
 // Classes.js — classes page rendering: class cards, quiz panels, drill actions
 
-import { getMem, getRec, isWeak } from '../engine/memory.js';
+import { getMem, getRec, isWeak, weightedSample, interleaveQuestions } from '../engine/memory.js';
 import { getDecks, getDeckById, getDeckColor } from '../engine/decks.js';
 import { getClasses } from '../engine/classes.js';
 import { makeDeckCard } from '../components/DeckCard.js';
@@ -178,6 +178,7 @@ export function drillClassMixed(classId, singleDeckId) {
 
   QS.deck      = { id: 'class-drill-' + classId, name: 'Class Drill' };
   QS.questions = weakQs.sort(() => Math.random() - 0.5);
+  QS.questions = interleaveQuestions(QS.questions, mem);
   QS.mode      = 'drill';
   startQS();
 }
@@ -241,7 +242,13 @@ export function launchClassQuiz(deckId) {
   const modal = document.getElementById('class-quiz-modal');
   if (modal) modal.style.display = 'none';
 
-  window.dispatchEvent(new CustomEvent('sb-start-quiz', {
-    detail: { deckId, mode: 'standard', count: _cqCount, source: 'class' }
-  }));
+  const deck = getDeckById(deckId);
+  if (!deck) return;
+  const mem = getMem();
+  const n = Math.min(_cqCount, deck.questions.length);
+  QS.deck = deck;
+  QS.questions = weightedSample(deck.questions, mem, n);
+  QS.questions = interleaveQuestions(QS.questions, mem);
+  QS.mode = 'standard';
+  startQS();
 }
