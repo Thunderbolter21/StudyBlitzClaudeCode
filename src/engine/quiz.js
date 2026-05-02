@@ -46,6 +46,9 @@ export let EX = { deck: null, questions: [], answers: {}, graded: false };
 export let selectedDeckId = null;
 export function setSelectedDeckId(id) { selectedDeckId = id; }
 
+// ── Response-time timer ──
+let _questionStartTime = null;
+
 // ══════════════════════════════════════════════
 //  QUIZ LAUNCH FUNCTIONS
 // ══════════════════════════════════════════════
@@ -263,6 +266,7 @@ export function startQS() {
 }
 
 export function renderQ() {
+  _questionStartTime = Date.now();
   const q = QS.questions[QS.current];
   if (!q) return;
   QS.answered = false;
@@ -365,6 +369,8 @@ export function startTCTimer() {
 
 export function answerQ(idx) {
   if (QS.answered) return;
+  const answerTimeMs = _questionStartTime ? Date.now() - _questionStartTime : null;
+  _questionStartTime = null;
   QS.answered = true;
   if (QS.mode !== 'timechallenge') clearInterval(QS.timer);
   const q = QS.questions[QS.current];
@@ -374,7 +380,7 @@ export function answerQ(idx) {
   const mem = getMem();
   const prevRec = getRec(mem, q.id);
   const wasWeak = isWeak(prevRec);
-  updateRec(mem, q.id, correct);
+  updateRec(mem, q.id, correct, answerTimeMs);
   setMem(mem);
   const newRec = getRec(mem, q.id);
 

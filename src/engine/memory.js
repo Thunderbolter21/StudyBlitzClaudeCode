@@ -28,10 +28,16 @@ export function getRec(mem, id) {
   return r;
 }
 
-export function updateRec(mem, id, wasCorrect) {
+export function updateRec(mem, id, wasCorrect, answerTimeMs = null) {
   const r = getRec(mem, id);
   r.total++;
   r.lastResult = wasCorrect ? 'correct' : 'wrong';
+
+  r.responseTimes = r.responseTimes || [];
+  if (answerTimeMs && answerTimeMs > 0 && answerTimeMs < 60000) {
+    r.responseTimes.push({ ms: answerTimeMs, correct: wasCorrect, ts: Date.now() });
+    if (r.responseTimes.length > 20) r.responseTimes = r.responseTimes.slice(-20);
+  }
 
   if (wasCorrect) {
     r.correct++;
