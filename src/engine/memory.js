@@ -54,9 +54,40 @@ export function updateRec(mem, id, wasCorrect) {
   return mem;
 }
 
-export const isMastered = r => r.reps >= 3;
+export const isMastered   = r => r.reps >= 3;
 export const drillCleared = r => r.everWrong && r.reps >= 2;
-export const isWeak = r => r.everWrong && r.reps < 2;
+export const isWeak       = r => r.everWrong && r.reps < 2;
+export const isDue        = r => r.everWrong && (r.due || 0) <= Date.now();
+
+// Returns [{q, deck}] for every overdue question across the given decks.
+export function getDueCards(decks) {
+  const mem = getMem();
+  const cards = [];
+  decks.forEach(deck => {
+    deck.questions.forEach(q => {
+      if (isDue(getRec(mem, q.id))) cards.push({ q, deck });
+    });
+  });
+  return cards;
+}
+
+// Returns Map<classId, {cls, count}> for overdue questions that belong to a class.
+export function getOverdueByClass(decks, classes) {
+  const mem = getMem();
+  const map = new Map();
+  decks.forEach(deck => {
+    if (!deck.classId) return;
+    const cls = classes.find(c => c.id === deck.classId);
+    if (!cls) return;
+    deck.questions.forEach(q => {
+      if (!isDue(getRec(mem, q.id))) return;
+      const entry = map.get(deck.classId);
+      if (entry) entry.count++;
+      else map.set(deck.classId, { cls, count: 1 });
+    });
+  });
+  return map;
+}
 
 export function getDueCount() {
   const mem = getMem();

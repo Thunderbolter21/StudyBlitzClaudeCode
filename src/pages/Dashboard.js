@@ -1,7 +1,8 @@
 // Dashboard.js — dashboard page rendering: stats, recent deck, knowledge breakdown
 
-import { getMem, getRec, isWeak, isMastered, weightedSample, getDueCount } from '../engine/memory.js';
+import { getMem, getRec, isWeak, isMastered, isDue, getDueCards, getOverdueByClass, weightedSample, getDueCount } from '../engine/memory.js';
 import { getDecks, getDeckById, getDeckColor } from '../engine/decks.js';
+import { getClasses } from '../engine/classes.js';
 import { load } from '../engine/storage.js';
 import { KEYS } from '../config.js';
 import { QS, quickStartDeck, drillDeck, startQS, launchExam } from '../engine/quiz.js';
@@ -77,16 +78,25 @@ export function refreshDashboard() {
     }
   }
 
-  // Due-for-review banner
+  // SM-2 review callout (between dash-recent and dash-tiles)
+  const dueCards = getDueCards(decks);
+  const byClass  = getOverdueByClass(decks, getClasses());
+  _renderReviewCallout(dueCards, byClass);
+
+  // Legacy due-for-review banner — only show when the callout is empty
   const dueBanner = document.getElementById('dash-due-banner');
   const dueCountEl = document.getElementById('dash-due-count');
   if (dueBanner) {
-    const due = getDueCount();
-    if (due > 0) {
-      if (dueCountEl) dueCountEl.textContent = due;
-      dueBanner.style.display = '';
-    } else {
+    if (dueCards.length > 0) {
       dueBanner.style.display = 'none';
+    } else {
+      const due = getDueCount();
+      if (due > 0) {
+        if (dueCountEl) dueCountEl.textContent = due;
+        dueBanner.style.display = '';
+      } else {
+        dueBanner.style.display = 'none';
+      }
     }
   }
 }
@@ -177,6 +187,44 @@ export function closeKB() {
   const modal = document.getElementById('kb-modal');
   if (modal) modal.style.display = 'none';
 }
+
+/* ── _renderReviewCallout ─────────────────────────────────── */
+function _renderReviewCallout(dueCards, byClass) {
+  const el = document.getElementById('dash-review-callout');
+  if (!el) return;
+
+  if (dueCards.length === 0) { el.innerHTML = ''; return; }
+
+  const count = dueCards.length;
+
+  const classPillsHtml = byClass.size > 0
+    ? `<div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;">${
+        [...byClass.values()].map(({ cls, count: n }) =>
+          `<span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.18rem 0.55rem;border-radius:99px;background:rgba(255,255,255,0.06);font-size:0.71rem;color:var(--muted);">` +
+          `<span style="width:6px;height:6px;border-radius:50%;background:${cls.color};flex-shrink:0;"></span>${cls.name} · ${n}</span>`
+        ).join('')
+      }</div>`
+    : '';
+
+  el.innerHTML = `
+    <div class="card" style="border-left:3px solid var(--gold);margin-bottom:1.5rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.8rem;">
+        <div>
+          <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.12em;color:var(--muted);margin-bottom:0.3rem;">📅 Due for Review</div>
+          <div style="font-weight:700;font-size:1.05rem;">${count} card${count !== 1 ? 's' : ''} ready</div>
+          ${classPillsHtml}
+        </div>
+        <button class="btn btn-primary btn-sm" id="dash-review-btn">&#9654; Review Now</button>
+      </div>
+    </div>`;
+
+  const btn = document.getElementById('dash-review-btn');
+  if (btn) btn.onclick = () => openReviewModal();
+}
+
+/* ── openReviewModal ──────────────────────────────────────── */
+// Step 03 fills in the modal body; this stub keeps the wiring intact.
+export function openReviewModal() {}
 
 /* ── relaunchRecent ───────────────────────────────────────── */
 export function relaunchRecent() {
