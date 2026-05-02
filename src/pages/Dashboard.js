@@ -102,6 +102,42 @@ export function refreshDashboard() {
   }
 }
 
+/* ── getConfidentlyWrong ──────────────────────────────────── */
+// A question is "confidently wrong" if at least one wrong answer was
+// answered faster than p33 of that question's correct-answer history.
+// Default p33 = 2000ms when correct history has fewer than 3 entries.
+function getConfidentlyWrong(decks, mem) {
+  const results = [];
+  decks.forEach(deck => {
+    deck.questions.forEach(q => {
+      const r = getRec(mem, q.id);
+      if (!r.everWrong || !r.responseTimes?.length) return;
+
+      const correctTimes = r.responseTimes
+        .filter(rt => rt.correct && rt.ms > 0)
+        .map(rt => rt.ms)
+        .sort((a, b) => a - b);
+
+      const p33 = correctTimes.length >= 3
+        ? correctTimes[Math.floor(correctTimes.length * 0.33)]
+        : 2000;
+
+      const hasFastWrong = r.responseTimes.some(rt => !rt.correct && rt.ms <= p33);
+      if (!hasFastWrong) return;
+
+      const wrongTimes = r.responseTimes.filter(rt => !rt.correct).map(rt => rt.ms);
+      results.push({
+        q,
+        deckName: deck.name,
+        deckColor: getDeckColor(deck),
+        wrongCount: r.total - r.correct,
+        fastestWrong: Math.min(...wrongTimes),
+      });
+    });
+  });
+  return results.sort((a, b) => b.wrongCount - a.wrongCount);
+}
+
 /* ── Knowledge Breakdown modal ───────────────────────────── */
 export function openKnowledgeBreakdown() {
   const modal = document.getElementById('kb-modal');
@@ -154,6 +190,38 @@ export function openKnowledgeBreakdown() {
       <div class="kb-bar-seg" style="width:${pWk}%;background:var(--accent)" title="Weak ${pWk}%"></div>
       <div class="kb-bar-seg" style="width:${pMs}%;background:var(--green)" title="Mastered ${pMs}%"></div>
     `;
+  }
+
+  // Confidently wrong section
+  const cwEl = document.getElementById('kb-cw');
+  if (cwEl) {
+    const cw = getConfidentlyWrong(decks, mem);
+    if (cw.length === 0) {
+      cwEl.innerHTML = '';
+    } else {
+      const shown = cw.slice(0, 5);
+      const extra = cw.length - 5;
+      const listHtml = shown.map(({ q, deckName, deckColor }) => `
+        <div style="display:flex;align-items:flex-start;gap:0.6rem;padding:0.4rem 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+          <div style="width:8px;height:8px;border-radius:50%;background:${deckColor};flex-shrink:0;margin-top:0.35rem;"></div>
+          <div>
+            <div style="font-size:0.65rem;color:var(--muted);">${deckName}</div>
+            <div style="font-size:0.82rem;color:var(--text);">${q.q.length > 80 ? q.q.substring(0, 80) + '…' : q.q}</div>
+          </div>
+        </div>`).join('');
+      const moreHtml = extra > 0
+        ? `<div style="font-size:0.72rem;color:var(--muted);padding-top:0.5rem;">+ ${extra} more</div>`
+        : '';
+      cwEl.innerHTML = `
+        <div style="background:rgba(255,63,108,0.08);border:1px solid rgba(255,63,108,0.3);border-left:3px solid var(--accent);border-radius:var(--radius);padding:1rem 1.2rem;margin-bottom:1.5rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:0.05em;color:var(--accent);">🚨 Confidently Wrong: ${cw.length}</div>
+            <div style="font-size:0.7rem;color:var(--muted);">Fast answer · Wrong result</div>
+          </div>
+          <div style="font-size:0.78rem;color:#f0ede8;margin-bottom:0.8rem;line-height:1.5;">These questions you answered quickly AND incorrectly. Your brain has a confident but wrong memory trace — the most dangerous kind before an exam.</div>
+          ${listHtml}${moreHtml}
+        </div>`;
+    }
   }
 
   // Per-deck table
