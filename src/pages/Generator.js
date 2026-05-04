@@ -886,8 +886,15 @@ export function saveDeck() {
     latest.push(finalDeck);
     saveDecks(latest);
     supaSaveDeck(finalDeck);
-    if (_toast) _toast(`✓ "${finalDeck.name}" saved to library!`);
     _resetGeneratorUI();
+    // First user-created deck — graduate to returning-user dashboard
+    const userDecks = getDecks().filter(d => !d.builtIn);
+    if (userDecks.length === 1) {
+      if (_toast) _toast('🎉 First deck saved! Welcome to StudyBlitz.');
+      setTimeout(() => _nav?.('dashboard'), 1100);
+      return;
+    }
+    if (_toast) _toast(`✓ "${finalDeck.name}" saved to library!`);
     if (_refreshAll) _refreshAll();
   });
 }

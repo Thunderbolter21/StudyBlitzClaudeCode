@@ -22,6 +22,44 @@ const MODE_LABELS = {
   exam: 'Exam Mode'
 };
 
+/* ── _restoreDashboardShell ───────────────────────────────── */
+// Rebuilds the static returning-user HTML if onboarding previously wiped it.
+function _restoreDashboardShell(el) {
+  el.innerHTML = `
+    <div class="page-header">
+      <h1>DASHBOARD</h1>
+      <p>Your adaptive study command center</p>
+    </div>
+    <div id="sb-auth-banner" style="display:none;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.6rem;padding:0.65rem 1.1rem;background:rgba(56,178,255,0.07);border:1px solid rgba(56,178,255,0.18);border-radius:var(--radius);margin-bottom:1.4rem;">
+      <span style="font-size:0.82rem;color:var(--muted);">☁️ Sign in to sync your decks across devices</span>
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-shrink:0;">
+        <button class="btn btn-ghost btn-sm" id="sb-banner-signin">Sign In</button>
+        <button class="btn btn-primary btn-sm" id="sb-banner-signup">Create Account</button>
+        <button class="btn btn-ghost btn-sm" id="sb-banner-dismiss" style="padding:0.2rem 0.5rem;opacity:0.5;" title="Dismiss">✕</button>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card clickable" style="--c:var(--accent)" onclick="openKnowledgeBreakdown()" title="Click to see your knowledge breakdown"><div class="stat-num" id="dash-total-q">0</div><div class="stat-lbl">Total Questions ↗</div></div>
+      <div class="stat-card" style="--c:var(--green)"><div class="stat-num" id="dash-mastered">0</div><div class="stat-lbl">Mastered</div></div>
+      <div class="stat-card" style="--c:var(--gold)"><div class="stat-num" id="dash-weak">0</div><div class="stat-lbl">Weak Spots</div></div>
+      <div class="stat-card" style="--c:var(--blue)"><div class="stat-num" id="dash-decks">0</div><div class="stat-lbl">Test Decks</div></div>
+    </div>
+    <div id="dash-due-banner" style="display:none;margin-bottom:1.5rem;padding:1rem 1.3rem;background:rgba(255,201,74,0.08);border:1px solid var(--gold);border-radius:var(--radius);cursor:pointer;" onclick="nav('quiz-select')">
+      <span style="font-size:1.1rem;margin-right:0.5rem;">📅</span>
+      <span style="font-weight:600;color:var(--gold);" id="dash-due-count">0</span>
+      <span style="color:var(--muted);font-size:0.88rem;"> questions due for review today</span>
+    </div>
+    <div id="dash-recent"></div>
+    <div id="dash-review-callout"></div>
+    <div class="dash-tiles">
+      <div class="dash-tile" style="--tc:var(--accent)" onclick="nav('classes')"><div class="tile-icon">🎓</div><div class="tile-label">Classes</div></div>
+      <div class="dash-tile" style="--tc:var(--green)" onclick="nav('quiz-select')"><div class="tile-icon">🎮</div><div class="tile-label">Quick Quiz</div></div>
+      <div class="dash-tile" style="--tc:var(--blue)" onclick="nav('generator')"><div class="tile-icon">🛠️</div><div class="tile-label">Quiz Builder</div></div>
+      <div class="dash-tile" style="--tc:var(--purple)" onclick="nav('saved-tests')"><div class="tile-icon">📁</div><div class="tile-label">Saved Tests</div></div>
+      <div class="dash-tile" style="--tc:var(--gold)" onclick="nav('weak-spots')"><div class="tile-icon">🎯</div><div class="tile-label">Weak Spots</div></div>
+    </div>`;
+}
+
 /* ── refreshDashboard ────────────────────────────────────── */
 export function refreshDashboard() {
   const decks = getDecks();
@@ -31,6 +69,11 @@ export function refreshDashboard() {
   if (isNewUser) {
     renderOnboardingDashboard(document.getElementById('page-dashboard'));
     return;
+  }
+
+  // Restore static shell if onboarding previously replaced it
+  if (!document.getElementById('dash-total-q')) {
+    _restoreDashboardShell(document.getElementById('page-dashboard'));
   }
 
   const mem = getMem();
