@@ -343,15 +343,70 @@ export function openReviewModal() {
   });
 }
 
+/* ── _buildStepCards ─────────────────────────────────────── */
+function _buildStepCards() {
+  const steps = [
+    { num: 1, icon: '🎓', title: 'Create a Class',    body: 'Think of classes like folders — one per subject. Accounting 210, Macroeconomics, whatever you\'re taking. Everything is organized by class.' },
+    { num: 2, icon: '🛠️', title: 'Build a Deck',      body: 'Upload your notes or PDFs to the Quiz Builder. StudyBlitz uses AI to generate multiple-choice questions automatically. Or paste them manually.' },
+    { num: 3, icon: '🎮', title: 'Take a Quiz',        body: 'Choose Standard for a clean practice session, Time Challenge to race the clock, or Exam Mode for a full mock exam with graded results.' },
+    { num: 4, icon: '🎯', title: 'Track Weak Spots',   body: 'Every wrong answer is remembered. StudyBlitz surfaces the questions you keep missing and prioritizes them in future sessions.' },
+    { num: 5, icon: '📅', title: 'Review Due Cards',   body: 'The SM-2 algorithm schedules reviews at the optimal moment — right before you\'d forget. Your dashboard shows when cards are due.' },
+  ];
+  return steps.map(s => `
+    <div class="onb-step-card">
+      <div class="onb-step-num">STEP ${s.num}</div>
+      <div class="onb-step-title">${s.icon} ${s.title}</div>
+      <div class="onb-step-body">${s.body}</div>
+    </div>`).join('');
+}
+
 /* ── renderOnboardingDashboard ───────────────────────────── */
 export function renderOnboardingDashboard(container) {
   if (!container) return;
-  // Stub — full onboarding UI added in Step 2
+
   container.innerHTML = `
-    <div style="padding:3rem 2rem;text-align:center;">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:2.8rem;letter-spacing:0.06em;color:var(--accent);margin-bottom:0.5rem;">WELCOME TO STUDYBLITZ</div>
-      <div style="color:var(--muted);font-size:0.9rem;">Full onboarding experience coming in Step 2…</div>
+    <div class="onb-wrap">
+
+      <!-- SECTION A: Hero + CTAs + Instructions -->
+      <section class="onb-hero fade-up">
+        <div class="onb-eyebrow">Adaptive Quiz Engine</div>
+        <h1 class="onb-headline">STUDY<br>SMARTER.</h1>
+        <p class="onb-sub">StudyBlitz builds adaptive quizzes from your notes and remembers which concepts trip you up — so every study session targets exactly what you need to know.</p>
+
+        <div class="onb-ctas">
+          <button class="btn btn-primary onb-cta-primary" onclick="openCreateClassModal()">🎓 Create Your First Class</button>
+          <button class="onb-cta-ghost" onclick="nav('generator')">🛠️ Build a Deck</button>
+        </div>
+
+        <div class="onb-accordion">
+          <button class="onb-accordion-trigger" id="onb-acc-btn" onclick="window._onbToggle()" aria-expanded="false">
+            <span>📖 How does StudyBlitz work?</span>
+            <span class="onb-chevron" id="onb-chevron">▼</span>
+          </button>
+          <div class="onb-accordion-body" id="onb-acc-body">
+            ${_buildStepCards()}
+          </div>
+        </div>
+
+        <div class="onb-scroll-hint">
+          <span class="onb-bob">↓</span>&nbsp;See it in action
+        </div>
+      </section>
+
+      <!-- SECTION B: Demo Quiz (Step 3 populates this) -->
+      <section class="onb-demo-section" id="onb-demo-section"></section>
+
     </div>`;
+
+  window._onbToggle = function () {
+    const body    = document.getElementById('onb-acc-body');
+    const chevron = document.getElementById('onb-chevron');
+    const btn     = document.getElementById('onb-acc-btn');
+    const isOpen  = body.classList.contains('onb-acc-open');
+    body.classList.toggle('onb-acc-open', !isOpen);
+    chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+    btn.setAttribute('aria-expanded', String(!isOpen));
+  };
 }
 
 /* ── showGettingStarted ───────────────────────────────────── */
