@@ -21,7 +21,7 @@ import {
   getAllWeakCount, renderFixButton, launchConfetti,
   initQuizCallbacks
 } from './engine/quiz.js';
-import { refreshDashboard, openKnowledgeBreakdown, closeKB, relaunchRecent, openReviewModal, initDashboardCallbacks } from './pages/Dashboard.js';
+import { refreshDashboard, openKnowledgeBreakdown, closeKB, relaunchRecent, openReviewModal, initDashboardCallbacks, showGettingStarted } from './pages/Dashboard.js';
 import { refreshClasses, drillClassMixed, openClassQuizPanel, adjCQCount, launchClassQuiz, initClassesCallbacks } from './pages/Classes.js';
 import { refreshQuizSelect, onModeChange, adjQCount, initQuizSelectCallbacks } from './pages/QuizSelect.js';
 import { refreshSavedTests, initSavedTestsCallbacks } from './pages/SavedTests.js';
@@ -101,6 +101,7 @@ function exposeGlobals() {
   window.openKnowledgeBreakdown = openKnowledgeBreakdown;
   window.closeKB = closeKB;
   window.openReviewModal = openReviewModal;
+  window.showGettingStarted = showGettingStarted;
   window.openCreateClassModal = openCreateClassModal;
   window.openClassMenu = openClassMenu;
   window.switchMethod = switchMethod;

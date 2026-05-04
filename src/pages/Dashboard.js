@@ -25,6 +25,14 @@ const MODE_LABELS = {
 /* ── refreshDashboard ────────────────────────────────────── */
 export function refreshDashboard() {
   const decks = getDecks();
+  const userDecks = decks.filter(d => !d.builtIn);
+  const isNewUser = userDecks.length === 0;
+
+  if (isNewUser) {
+    renderOnboardingDashboard(document.getElementById('page-dashboard'));
+    return;
+  }
+
   const mem = getMem();
 
   // Unique question set across all decks
@@ -333,6 +341,23 @@ export function openReviewModal() {
   ov.querySelectorAll('[data-cls]').forEach(btn => {
     btn.onclick = () => { ov.remove(); launchReviewClass(btn.dataset.cls); };
   });
+}
+
+/* ── renderOnboardingDashboard ───────────────────────────── */
+export function renderOnboardingDashboard(container) {
+  if (!container) return;
+  // Stub — full onboarding UI added in Step 2
+  container.innerHTML = `
+    <div style="padding:3rem 2rem;text-align:center;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:2.8rem;letter-spacing:0.06em;color:var(--accent);margin-bottom:0.5rem;">WELCOME TO STUDYBLITZ</div>
+      <div style="color:var(--muted);font-size:0.9rem;">Full onboarding experience coming in Step 2…</div>
+    </div>`;
+}
+
+/* ── showGettingStarted ───────────────────────────────────── */
+export function showGettingStarted() {
+  _nav?.('dashboard');
+  renderOnboardingDashboard(document.getElementById('page-dashboard'));
 }
 
 /* ── relaunchRecent ───────────────────────────────────────── */

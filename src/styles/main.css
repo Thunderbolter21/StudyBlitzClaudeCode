@@ -277,6 +277,10 @@ select:disabled{opacity:0.4;cursor:not-allowed;}
 @keyframes tcPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,63,108,0);}50%{box-shadow:0 0 18px 6px rgba(255,63,108,0.55);}}
 .tc-urgent{animation:tcPulse 0.9s ease-in-out infinite;}
 
+/* ── NAV GETTING STARTED LINK ── */
+.nav-gs-link{background:transparent;border:none;color:var(--muted);font-size:0.75rem;cursor:pointer;padding:0.4rem 0;text-align:left;display:flex;align-items:center;gap:0.4rem;font-family:'Sora',sans-serif;opacity:0.7;transition:opacity 0.2s,color 0.2s;width:100%;}
+.nav-gs-link:hover{opacity:1;color:var(--text);}
+
 /* Scrollbar global */
 ::-webkit-scrollbar{width:5px;height:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
