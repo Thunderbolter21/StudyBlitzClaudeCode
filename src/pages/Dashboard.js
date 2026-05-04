@@ -343,6 +343,98 @@ export function openReviewModal() {
   });
 }
 
+/* ── DEMO_QUESTIONS — hardcoded, never touches real engine ── */
+const DEMO_QUESTIONS = [
+  {
+    id: 'demo-1',
+    q: 'What does SM-2 stand for in spaced repetition?',
+    opts: ['Study Method 2.0', 'SuperMemo Algorithm 2', 'Spaced Memory Mapping', 'Sequential Mastery Mode'],
+    ans: 1,
+    explain: 'SM-2 is the SuperMemo Algorithm version 2, developed by Piotr Woźniak in 1987. It calculates optimal review intervals based on how well you recalled each answer.'
+  },
+  {
+    id: 'demo-2',
+    q: 'What happens when you get a question wrong in StudyBlitz?',
+    opts: ["It's removed from your deck permanently", "It's added to your Weak Spots for focused drilling", 'Your score resets to zero', 'Nothing — wrong answers are ignored'],
+    ans: 1,
+    explain: 'Wrong answers are tracked and added to your Weak Spots. StudyBlitz prioritizes these in future sessions so you focus where it counts.'
+  },
+  {
+    id: 'demo-3',
+    q: 'What is the spacing effect in learning science?',
+    opts: ['Studying in a quiet space improves retention', 'Longer study sessions always produce better results', 'Spreading practice over time beats massed cramming', 'Taking breaks every 20 minutes maximizes focus'],
+    ans: 2,
+    explain: 'The spacing effect (Ebbinghaus, 1885) shows that distributing practice over time leads to far better long-term retention than cramming — even with the same total study time.'
+  },
+  {
+    id: 'demo-4',
+    q: 'In Time Challenge mode, what triggers the confetti?',
+    opts: ['Getting 10 correct in a row', 'Finishing all questions before time runs out', 'The timer reaching zero', 'Beating your previous high score'],
+    ans: 2,
+    explain: 'When the countdown hits zero, StudyBlitz shows your results with a confetti burst. The goal is to answer as many correctly as possible before time runs out.'
+  }
+];
+
+/* ── _renderDemoQ — pure presentational, no engine calls ─── */
+function _renderDemoQ() {
+  const el = document.getElementById('onb-demo-quiz');
+  if (!el) return;
+  const state = window._demoState;
+
+  if (state.current >= DEMO_QUESTIONS.length) {
+    el.innerHTML = `
+      <div class="onb-q-card onb-results-card fade-up">
+        <div class="onb-results-title">🎓 That's how StudyBlitz works.</div>
+        <div class="onb-results-sub">Ready to build your own deck?</div>
+        <div class="onb-ctas" style="margin-top:1.5rem;">
+          <button class="btn btn-primary onb-cta-primary" onclick="openCreateClassModal()">🎓 Create a Class</button>
+          <button class="onb-cta-ghost" onclick="nav('generator')">🛠️ Build a Deck</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const q = DEMO_QUESTIONS[state.current];
+  const isLast = state.current === DEMO_QUESTIONS.length - 1;
+
+  el.innerHTML = `
+    <div class="onb-q-card fade-up">
+      <div class="onb-demo-badge">DEMO MODE</div>
+      <div class="onb-q-num">Question ${state.current + 1} of ${DEMO_QUESTIONS.length}</div>
+      <div class="onb-q-text">${q.q}</div>
+      <div class="onb-q-opts" id="onb-opts">
+        ${q.opts.map((opt, i) => `
+          <button class="onb-opt-btn" onclick="window._demoAnswer(${i})">${opt}</button>
+        `).join('')}
+      </div>
+      <div class="onb-q-explain" id="onb-explain"></div>
+      <button class="btn btn-primary onb-next-btn" id="onb-next-btn" style="display:none;" onclick="window._demoNext()">
+        ${isLast ? 'See Results →' : 'Next →'}
+      </button>
+    </div>`;
+
+  window._demoAnswer = function (idx) {
+    if (state.answered) return;
+    state.answered = true;
+    const opts = document.querySelectorAll('.onb-opt-btn');
+    opts.forEach((btn, i) => {
+      btn.disabled = true;
+      if (i === q.ans) btn.classList.add('onb-opt-correct');
+      else if (i === idx) btn.classList.add('onb-opt-wrong');
+    });
+    const explain = document.getElementById('onb-explain');
+    if (explain) { explain.textContent = q.explain; explain.classList.add('onb-explain-visible'); }
+    const nextBtn = document.getElementById('onb-next-btn');
+    if (nextBtn) nextBtn.style.display = 'block';
+  };
+
+  window._demoNext = function () {
+    state.current++;
+    state.answered = false;
+    _renderDemoQ();
+  };
+}
+
 /* ── _buildStepCards ─────────────────────────────────────── */
 function _buildStepCards() {
   const steps = [
@@ -393,8 +485,15 @@ export function renderOnboardingDashboard(container) {
         </div>
       </section>
 
-      <!-- SECTION B: Demo Quiz (Step 3 populates this) -->
-      <section class="onb-demo-section" id="onb-demo-section"></section>
+      <!-- SECTION B: Interactive Demo Quiz -->
+      <section class="onb-demo-section">
+        <div class="onb-demo-header fade-up-obs">
+          <div class="onb-demo-eyebrow">LIVE DEMO</div>
+          <h2 class="onb-demo-title">Try it yourself →</h2>
+          <p class="onb-demo-sub">These aren't real questions — just a feel for how quizzes work.</p>
+        </div>
+        <div id="onb-demo-quiz"></div>
+      </section>
 
     </div>`;
 
@@ -407,6 +506,21 @@ export function renderOnboardingDashboard(container) {
     chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
     btn.setAttribute('aria-expanded', String(!isOpen));
   };
+
+  // Entrance animation for demo header via IntersectionObserver
+  const demoHeader = container.querySelector('.onb-demo-header');
+  if (demoHeader) {
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add('in-view'); obs.unobserve(e.target); }
+      });
+    }, { threshold: 0.15 });
+    obs.observe(demoHeader);
+  }
+
+  // Initialise demo quiz state — isolated from all real engine state
+  window._demoState = { current: 0, answered: false };
+  _renderDemoQ();
 }
 
 /* ── showGettingStarted ───────────────────────────────────── */
