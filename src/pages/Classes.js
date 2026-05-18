@@ -1,10 +1,11 @@
-// Classes.js — classes page rendering: class cards, quiz panels, drill actions
+﻿// Classes.js — classes page rendering: class cards, quiz panels, drill actions
 
 import { getMem, getRec, isWeak, weightedSample, interleaveQuestions } from '../engine/memory.js';
 import { getDecks, getDeckById, getDeckColor } from '../engine/decks.js';
 import { getClasses } from '../engine/classes.js';
 import { makeDeckCard } from '../components/DeckCard.js';
-import { QS, startQS } from '../engine/quiz.js';
+import { QS, startQS, launchExam } from '../engine/quiz.js';
+import { renderModeSelector, getSelectedMode } from '../pages/QuizSelect.js';
 
 let _toast, _nav, _refreshAll, _refreshClasses;
 export function initClassesCallbacks({ toast, nav, refreshAll, refreshClasses }) {
@@ -184,71 +185,79 @@ export function drillClassMixed(classId, singleDeckId) {
 }
 
 /* ── Class quiz panel ─────────────────────────────────────── */
-let _cqDeck = null;
-let _cqCount = 20;
-
+/* ── openClassQuizPanel ───────────────────────────────────── */
 export function openClassQuizPanel(deck, cls) {
-  _cqDeck = deck;
-  _cqCount = Math.min(20, deck.questions.length);
+  document.getElementById('cq-modal')?.remove();
 
-  let modal = document.getElementById('class-quiz-modal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'class-quiz-modal';
-    modal.className = 'modal-overlay';
-    modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
-    document.body.appendChild(modal);
+  const ov = document.createElement('div');
+  ov.id = 'cq-modal';
+  ov.className = 'modal-overlay';
+  ov.style.display = 'flex';
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+
+  const box = document.createElement('div');
+  box.className = 'modal-box';
+  box.style.cssText = 'max-width:480px;width:100%;max-height:90vh;overflow-y:auto;';
+
+  box.innerHTML = `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.2rem;padding-bottom:1rem;border-bottom:1px solid var(--border);">
+      <div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:0.05em;">${deck.name}</div>
+        <div style="font-size:0.75rem;color:var(--muted);margin-top:0.15rem;">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${cls.color};margin-right:0.4rem;vertical-align:middle;"></span>${cls.name} · ${deck.questions.length} questions
+        </div>
+      </div>
+      <button id="cq-close-btn" style="background:transparent;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:0.2rem 0.4rem;line-height:1;border-radius:6px;flex-shrink:0;" title="Close">✕</button>
+    </div>
+    <div id="cq-selector-wrap"></div>
+    <button class="btn btn-primary" id="cq-start-btn" style="width:100%;justify-content:center;margin-top:1.2rem;font-size:1rem;padding:0.85rem;">▶ Start Quiz</button>`;
+
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+
+  box.querySelector('#cq-close-btn').onclick = () => ov.remove();
+  box.querySelector('#cq-start-btn').onclick = () => _launchClassQuizFromModal(deck, cls);
+
+  renderModeSelector(
+    document.getElementById('cq-selector-wrap'),
+    'cq',
+    deck,
+    { includeGameModes: true }
+  );
+}
+
+/* ── _launchClassQuizFromModal ────────────────────────────── */
+function _launchClassQuizFromModal(deck, cls) {
+  const mode = getSelectedMode('cq');
+  const mem  = getMem();
+
+  document.getElementById('cq-modal')?.remove();
+
+  QS.deck = deck;
+  QS.mode = mode;
+
+  if (mode === 'exam') {
+    const n = Math.min(
+      Math.max(5, parseInt(document.getElementById('cq-count')?.value || deck.questions.length)),
+      deck.questions.length
+    );
+    launchExam(deck.id, n);
+    return;
   }
 
-  const color = getDeckColor(deck);
-  modal.innerHTML = `
-    <div class="modal-box" style="max-width:420px;">
-      <h2 style="margin-bottom:0.3rem;">${deck.name}</h2>
-      <div style="font-size:0.78rem;color:${cls.color};margin-bottom:1rem;">\u25CF ${cls.name}</div>
-      <div style="margin-bottom:1rem;">
-        <label>Questions</label>
-        <div class="num-input">
-          <button id="cq-minus">\u2212</button>
-          <input type="text" id="cq-count" value="${_cqCount}" style="width:70px;text-align:center;" readonly>
-          <button id="cq-plus">+</button>
-        </div>
-        <div style="font-size:0.7rem;color:var(--muted);margin-top:0.3rem;">${deck.questions.length} available</div>
-      </div>
-      <div style="display:flex;gap:0.8rem;flex-wrap:wrap;">
-        <button class="btn btn-primary" id="cq-launch">\u25B6 Start Quiz</button>
-        <button class="btn btn-ghost" id="cq-cancel">Cancel</button>
-      </div>
-    </div>
-  `;
+  if (mode === 'timechallenge') {
+    QS.tcSecs    = parseInt(document.getElementById('cq-tc-sel')?.value || '60');
+    QS.questions = [...deck.questions].sort(() => Math.random() - 0.5);
+    startQS();
+    return;
+  }
 
-  modal.style.display = 'flex';
+  const n = Math.min(
+    Math.max(5, parseInt(document.getElementById('cq-count')?.value || '20')),
+    deck.questions.length
+  );
 
-  document.getElementById('cq-minus').onclick = () => adjCQCount(-5);
-  document.getElementById('cq-plus').onclick = () => adjCQCount(5);
-  document.getElementById('cq-launch').onclick = () => launchClassQuiz(deck.id);
-  document.getElementById('cq-cancel').onclick = () => { modal.style.display = 'none'; };
-}
-
-/* ── adjCQCount ───────────────────────────────────────────── */
-export function adjCQCount(d) {
-  if (!_cqDeck) return;
-  _cqCount = Math.max(5, Math.min(_cqDeck.questions.length, _cqCount + d));
-  const el = document.getElementById('cq-count');
-  if (el) el.value = _cqCount;
-}
-
-/* ── launchClassQuiz ──────────────────────────────────────── */
-export function launchClassQuiz(deckId) {
-  const modal = document.getElementById('class-quiz-modal');
-  if (modal) modal.style.display = 'none';
-
-  const deck = getDeckById(deckId);
-  if (!deck) return;
-  const mem = getMem();
-  const n = Math.min(_cqCount, deck.questions.length);
-  QS.deck = deck;
   QS.questions = weightedSample(deck.questions, mem, n);
   QS.questions = interleaveQuestions(QS.questions, mem);
-  QS.mode = 'standard';
   startQS();
 }
