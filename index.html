@@ -514,6 +514,18 @@
   </div>
 </div>
 
+<!-- GUEST SIGNUP MODAL -->
+<div class="modal-overlay" id="guest-signup-modal" style="display:none;" onclick="if(event.target===this)closeGuestSignupModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem;">
+      <h2 style="margin:0;">Create a free account</h2>
+      <button class="btn btn-ghost" onclick="closeGuestSignupModal()" style="padding:0.3rem 0.6rem;font-size:1rem;">✕</button>
+    </div>
+    <p style="color:var(--muted);font-size:0.88rem;line-height:1.6;margin-bottom:1.5rem;">Sign up to start building decks and tracking your progress.</p>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="closeGuestSignupModal();openAuthModal('signup')">Sign Up / Log In</button>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast"></div>
 

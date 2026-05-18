@@ -1,6 +1,7 @@
 // Dashboard.js — dashboard page rendering: stats, recent deck, knowledge breakdown
 
 import { getMem, getRec, isWeak, isMastered, isDue, getDueCards, getOverdueByClass, weightedSample, getDueCount } from '../engine/memory.js';
+import { isLoggedIn } from '../engine/auth.js';
 import { getDecks, getDeckById, getDeckColor } from '../engine/decks.js';
 import { getClasses } from '../engine/classes.js';
 import { load } from '../engine/storage.js';
@@ -66,7 +67,7 @@ export function refreshDashboard() {
   const userDecks = decks.filter(d => !d.builtIn);
   const isNewUser = userDecks.length === 0;
 
-  if (isNewUser) {
+  if (isNewUser && !isLoggedIn()) {
     renderOnboardingDashboard(document.getElementById('page-dashboard'));
     return;
   }
@@ -430,8 +431,8 @@ function _renderDemoQ() {
         <div class="onb-results-title">🎓 That's how StudyBlitz works.</div>
         <div class="onb-results-sub">Ready to build your own deck?</div>
         <div class="onb-ctas" style="margin-top:1.5rem;">
-          <button class="btn btn-primary onb-cta-primary" onclick="openCreateClassModal()">🎓 Create a Class</button>
-          <button class="onb-cta-ghost" onclick="nav('generator')">🛠️ Build a Deck</button>
+          <button class="btn btn-primary onb-cta-primary" onclick="openGuestSignupModal()">🎓 Create a Class</button>
+          <button class="onb-cta-ghost" onclick="openGuestSignupModal()">🛠️ Build a Deck</button>
         </div>
       </div>`;
     return;
@@ -509,13 +510,15 @@ export function renderOnboardingDashboard(container) {
         <p class="onb-sub">StudyBlitz builds adaptive quizzes from your notes and remembers which concepts trip you up — so every study session targets exactly what you need to know.</p>
 
         <div class="onb-ctas">
-          <button class="btn btn-primary onb-cta-primary" onclick="openCreateClassModal()">🎓 Create Your First Class</button>
-          <button class="onb-cta-ghost" onclick="nav('generator')">🛠️ Build a Deck</button>
+          <button class="btn btn-primary onb-cta-primary" onclick="openGuestSignupModal()">🎓 Create Your First Class</button>
+          <button class="onb-cta-ghost" onclick="openGuestSignupModal()">🛠️ Build a Deck</button>
         </div>
+
+        <p class="onb-tier1-text">Paste your notes or drop a file into the Quiz Builder. StudyBlitz turns them into a quiz, tracks what you miss, and makes sure those questions come back until you've got them.</p>
 
         <div class="onb-accordion">
           <button class="onb-accordion-trigger" id="onb-acc-btn" onclick="window._onbToggle()" aria-expanded="false">
-            <span>📖 How does StudyBlitz work?</span>
+            <span>Step-by-step guide</span>
             <span class="onb-chevron" id="onb-chevron">▼</span>
           </button>
           <div class="onb-accordion-body" id="onb-acc-body">

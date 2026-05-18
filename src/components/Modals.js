@@ -323,6 +323,17 @@ export function openQuestionPicker(deckId) {
   });
 }
 
+// ── Guest signup prompt ──
+export function openGuestSignupModal() {
+  const modal = document.getElementById('guest-signup-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+export function closeGuestSignupModal() {
+  const modal = document.getElementById('guest-signup-modal');
+  if (modal) modal.style.display = 'none';
+}
+
 function confirmDeleteClass(classId) {
   const classes = getClasses().filter(c => c.id !== classId);
   saveClasses(classes);

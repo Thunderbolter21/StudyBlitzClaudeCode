@@ -7,7 +7,7 @@ import './styles/classes.css';
 
 import { nav, openNav, closeNav, initNavCallbacks, initNavListeners } from './components/Navigation.js';
 import { initDeckCardCallbacks } from './components/DeckCard.js';
-import { toggleDeckMenu, openAssignClassModal, openCreateClassModal, openClassMenu, initModalCallbacks } from './components/Modals.js';
+import { toggleDeckMenu, openAssignClassModal, openCreateClassModal, openClassMenu, initModalCallbacks, openGuestSignupModal, closeGuestSignupModal } from './components/Modals.js';
 import { initDeckCallbacks, getDecks, getDeckById, deleteDeck, initBuiltins } from './engine/decks.js';
 import { initAuth, syncOnBoot, scheduleSync, openAuthModal, updateAuthStatus, initAuthCallbacks } from './engine/auth.js';
 import { registerSyncCallback } from './engine/storage.js';
@@ -119,6 +119,8 @@ function exposeGlobals() {
   window.removeApiKey = removeApiKey;
   window.toast = toast;
   window.openAuthModal = openAuthModal;
+  window.openGuestSignupModal = openGuestSignupModal;
+  window.closeGuestSignupModal = closeGuestSignupModal;
 }
 
 // ── Keyboard handler ──

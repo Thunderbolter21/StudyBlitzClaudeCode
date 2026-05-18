@@ -297,6 +297,7 @@ select:disabled{opacity:0.4;cursor:not-allowed;}
 .onb-chevron{font-size:0.7rem;color:var(--muted);transition:transform 0.25s ease;display:inline-block;flex-shrink:0;}
 .onb-accordion-body{display:none;padding:0.6rem 1rem 1rem;background:var(--surface);}
 .onb-accordion-body.onb-acc-open{display:block;animation:fadeUp 0.2s forwards;}
+.onb-tier1-text{font-family:'Sora',sans-serif;color:#f0ede8;font-size:0.95rem;text-align:center;max-width:600px;margin:0 auto 1.5rem;line-height:1.6;}
 
 .onb-step-card{border-left:3px solid var(--accent);background:rgba(255,255,255,0.025);border-radius:0 var(--radius) var(--radius) 0;padding:0.85rem 1.1rem;margin-bottom:0.55rem;}
 .onb-step-num{font-size:0.6rem;text-transform:uppercase;letter-spacing:0.14em;color:var(--muted);margin-bottom:0.22rem;}
