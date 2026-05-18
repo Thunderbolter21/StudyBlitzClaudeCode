@@ -87,10 +87,20 @@ export function launchQuiz() {
   if (!deck) return;
   const mem = getMem();
   const modeEl = document.querySelector('input[name="quiz-mode"]:checked');
-  const mode = modeEl ? modeEl.value : 'standard';
+  let mode = modeEl ? modeEl.value : 'standard';
+
+  // Resolve Practice sub-settings — speed takes priority over streak
+  if (mode === 'standard') {
+    const speedOn  = document.getElementById('opt-speed')?.checked;
+    const streakOn = document.getElementById('opt-streak')?.checked;
+    if (speedOn)       mode = 'speed';
+    else if (streakOn) mode = 'streak';
+  }
 
   if (mode === 'exam') {
-    launchExam(selectedDeckId);
+    const countEl = document.getElementById('qs-count');
+    const n = countEl ? Math.min(parseInt(countEl.value) || deck.questions.length, deck.questions.length) : undefined;
+    launchExam(selectedDeckId, n);
     return;
   }
 
@@ -835,14 +845,18 @@ export function reviewExam() {
 //  EXAM MODE
 // ══════════════════════════════════════════════
 
-export function launchExam(overrideDeckId) {
+export function launchExam(overrideDeckId, overrideCount) {
   const deckId = overrideDeckId || selectedDeckId;
   if (!deckId) return;
   const deck = getDeckById(deckId);
   if (!deck) return;
 
+  const n = overrideCount != null
+    ? Math.min(Math.max(5, overrideCount), deck.questions.length)
+    : deck.questions.length;
+
   EX.deck = deck;
-  EX.questions = [...deck.questions].sort(() => Math.random() - 0.5);
+  EX.questions = [...deck.questions].sort(() => Math.random() - 0.5).slice(0, n);
   EX.answers = {};
   EX.graded = false;
 

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -123,25 +123,89 @@
         <div style="margin-top:1rem;display:flex;flex-direction:column;gap:1.2rem;">
           <div>
             <label>Mode</label>
-            <div style="display:flex;flex-direction:column;gap:0.5rem;" id="qs-modes" onchange="onModeChange()">
-              <label style="text-transform:none;letter-spacing:0;color:var(--text);display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.88rem;">
-                <input type="radio" name="quiz-mode" value="standard" checked> 📚 Standard — 10 pts per correct
-              </label>
-              <label style="text-transform:none;letter-spacing:0;color:var(--text);display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.88rem;">
-                <input type="radio" name="quiz-mode" value="speed"> ⚡ Speed Bonus — more pts for fast answers
-              </label>
-              <label style="text-transform:none;letter-spacing:0;color:var(--text);display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.88rem;">
-                <input type="radio" name="quiz-mode" value="streak"> 🔥 Streak Mode — pts multiply on streaks
-              </label>
-              <label style="text-transform:none;letter-spacing:0;color:var(--text);display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.88rem;">
-                <input type="radio" name="quiz-mode" value="drill"> 🎯 Drill Weak Spots — only your problem questions
-              </label>
-              <label style="text-transform:none;letter-spacing:0;color:var(--text);display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.88rem;">
-                <input type="radio" name="quiz-mode" value="timechallenge" onchange="onModeChange()"> ⏱️ Time Challenge — answer as many as possible
-              </label>
-              <label style="text-transform:none;letter-spacing:0;color:var(--text);display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.88rem;">
-                <input type="radio" name="quiz-mode" value="exam"> 📋 Exam Mode — all questions, grade at the end
-              </label>
+            <div id="qs-modes" onchange="onModeChange()">
+
+              <!-- Primary mode cards -->
+              <div class="mode-cards" id="qs-mode-cards">
+
+                <!-- Practice -->
+                <label class="mode-card" id="mc-practice">
+                  <input type="radio" name="quiz-mode" value="standard" checked>
+                  <div class="mode-card-inner">
+                    <div class="mode-card-icon">📚</div>
+                    <div class="mode-card-label">Practice</div>
+                    <div class="mode-card-sub">Adaptive MC · feedback after each answer</div>
+                  </div>
+                  <div class="mode-sub-settings" id="practice-sub">
+                    <label class="sub-toggle">
+                      <input type="checkbox" id="opt-speed">
+                      <span>⚡ Speed Bonus</span>
+                      <span class="sub-hint">Timer per question</span>
+                    </label>
+                    <label class="sub-toggle">
+                      <input type="checkbox" id="opt-streak">
+                      <span>🔥 Streak Mode</span>
+                      <span class="sub-hint">Multiplier on streaks</span>
+                    </label>
+                  </div>
+                </label>
+
+                <!-- Weak Spots -->
+                <label class="mode-card" id="mc-drill">
+                  <input type="radio" name="quiz-mode" value="drill">
+                  <div class="mode-card-inner">
+                    <div class="mode-card-icon">🎯</div>
+                    <div class="mode-card-label">Weak Spots</div>
+                    <div class="mode-card-sub">Only questions you've missed · clears on 2 correct</div>
+                  </div>
+                </label>
+
+                <!-- Exam -->
+                <label class="mode-card" id="mc-exam">
+                  <input type="radio" name="quiz-mode" value="exam">
+                  <div class="mode-card-inner">
+                    <div class="mode-card-icon">📋</div>
+                    <div class="mode-card-label">Exam Mode</div>
+                    <div class="mode-card-sub">All questions at once · graded on submit</div>
+                  </div>
+                </label>
+
+              </div>
+
+              <!-- Game Modes disclosure -->
+              <div class="game-modes-disclosure" id="qs-game-modes">
+                <button class="game-modes-toggle" onclick="toggleGameModes(event)" type="button">
+                  <span>⚡ Other Game Modes</span>
+                  <span class="gm-chevron">▼</span>
+                </button>
+                <div class="game-modes-panel" id="gm-panel">
+                  <label class="mode-card mode-card-sm">
+                    <input type="radio" name="quiz-mode" value="timechallenge">
+                    <div class="mode-card-inner">
+                      <div class="mode-card-icon">⏱️</div>
+                      <div class="mode-card-label">Time Challenge</div>
+                      <div class="mode-card-sub">Race the clock · high scores</div>
+                    </div>
+                  </label>
+                  <label class="mode-card mode-card-sm">
+                    <input type="radio" name="quiz-mode" value="speed">
+                    <div class="mode-card-inner">
+                      <div class="mode-card-icon">⚡</div>
+                      <div class="mode-card-label">Speed Bonus</div>
+                      <div class="mode-card-sub">Timer per question · fast = more points</div>
+                    </div>
+                  </label>
+                  <label class="mode-card mode-card-sm">
+                    <input type="radio" name="quiz-mode" value="streak">
+                    <div class="mode-card-inner">
+                      <div class="mode-card-icon">🔥</div>
+                      <div class="mode-card-label">Streak Mode</div>
+                      <div class="mode-card-sub">Points multiply on consecutive correct answers</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
             </div>
           </div>
           <div id="tc-time-wrap" style="display:none;">

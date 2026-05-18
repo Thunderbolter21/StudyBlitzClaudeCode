@@ -81,14 +81,62 @@ export function refreshQuizSelect() {
 /* ── onModeChange ──────────────────────────────────────────── */
 export function onModeChange() {
   const mode = document.querySelector('input[name="quiz-mode"]:checked')?.value || 'standard';
-  const isTC = mode === 'timechallenge';
-  const tcWrap = document.getElementById('tc-time-wrap');
-  const tcSel = document.getElementById('tc-time-sel');
+
   const qcWrap = document.getElementById('qs-count-wrap');
-  if (tcWrap) tcWrap.style.display = isTC ? 'block' : 'none';
-  if (tcSel) tcSel.disabled = !isTC;
-  if (qcWrap) qcWrap.style.display = isTC ? 'none' : 'block';
+  const tcWrap = document.getElementById('tc-time-wrap');
+  const tcSel  = document.getElementById('tc-time-sel');
+
+  // Show count for Practice/Speed/Streak/Exam; show time only for TC; hide count for Drill+TC
+  const showCount = ['standard', 'speed', 'streak', 'exam'].includes(mode);
+  const showTime  = mode === 'timechallenge';
+
+  if (qcWrap) qcWrap.style.display = showCount ? 'block' : 'none';
+  if (tcWrap) tcWrap.style.display = showTime  ? 'block' : 'none';
+  if (tcSel)  tcSel.disabled       = !showTime;
+
+  // Clear Practice sub-settings when switching away from the Practice card
+  if (mode !== 'standard') {
+    const speedChk  = document.getElementById('opt-speed');
+    const streakChk = document.getElementById('opt-streak');
+    if (speedChk)  speedChk.checked  = false;
+    if (streakChk) streakChk.checked = false;
+  }
+
   refreshQuizSelect();
+}
+
+/* ── toggleGameModes ───────────────────────────────────────── */
+export function toggleGameModes(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  document.getElementById('qs-game-modes')?.classList.toggle('open');
+}
+
+/* ── initQuizSelectListeners ───────────────────────────────── */
+// Called once on boot. Wires two behaviours:
+//   1. JS :has() fallback — syncs .selected on mode cards and .gm-active on
+//      the disclosure for browsers that don't support :has() yet.
+//   2. Game-mode radios auto-open the disclosure panel when selected.
+// onModeChange() is NOT called here — it fires via event bubbling to #qs-modes.
+export function initQuizSelectListeners() {
+  const allModeRadios = document.querySelectorAll('input[name="quiz-mode"]');
+  const disc = document.getElementById('qs-game-modes');
+
+  const syncSelected = () => {
+    allModeRadios.forEach(r => {
+      r.closest('.mode-card')?.classList.toggle('selected', r.checked);
+    });
+    const gameModeActive = !!document.querySelector('#gm-panel input[type="radio"]:checked');
+    disc?.classList.toggle('gm-active', gameModeActive);
+  };
+
+  allModeRadios.forEach(r => r.addEventListener('change', syncSelected));
+
+  document.querySelectorAll('#gm-panel input[type="radio"]').forEach(radio => {
+    radio.addEventListener('change', () => disc?.classList.add('open'));
+  });
+
+  syncSelected(); // set initial state — Practice card is checked by default
 }
 
 /* ── adjQCount ─────────────────────────────────────────────── */

@@ -23,7 +23,7 @@ import {
 } from './engine/quiz.js';
 import { refreshDashboard, openKnowledgeBreakdown, closeKB, relaunchRecent, openReviewModal, initDashboardCallbacks, showGettingStarted } from './pages/Dashboard.js';
 import { refreshClasses, drillClassMixed, openClassQuizPanel, adjCQCount, launchClassQuiz, initClassesCallbacks } from './pages/Classes.js';
-import { refreshQuizSelect, onModeChange, adjQCount, initQuizSelectCallbacks } from './pages/QuizSelect.js';
+import { refreshQuizSelect, onModeChange, adjQCount, initQuizSelectCallbacks, toggleGameModes, initQuizSelectListeners } from './pages/QuizSelect.js';
 import { refreshSavedTests, initSavedTestsCallbacks } from './pages/SavedTests.js';
 import { refreshWeakSpots, initWeakSpotsCallbacks } from './pages/WeakSpots.js';
 import {
@@ -121,6 +121,7 @@ function exposeGlobals() {
   window.openAuthModal = openAuthModal;
   window.openGuestSignupModal = openGuestSignupModal;
   window.closeGuestSignupModal = closeGuestSignupModal;
+  window.toggleGameModes = toggleGameModes;
 }
 
 // ── Keyboard handler ──
@@ -168,6 +169,7 @@ async function boot() {
 
   refreshAll();
   updateAuthStatus();                     // render correct auth state in nav + banner
+  initQuizSelectListeners();              // wire game-mode radio auto-open once
 }
 
 boot();
