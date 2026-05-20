@@ -772,41 +772,53 @@ export function reviewExam() {
   const examScreen = document.getElementById('exam-screen');
   if (examScreen) examScreen.style.display = 'flex';
 
-  // Re-render exam with graded state visible
+  // renderExam() rebuilds the DOM from scratch and restores EX.answers selections
   renderExam();
 
-  // Highlight correct/wrong after grading
-  if (EX.graded) {
-    EX.questions.forEach((q, i) => {
-      const qDiv = document.getElementById('exam-q-' + i);
-      if (!qDiv) return;
-      const selected = EX.answers[i];
-      const isCorrect = selected === q.ans;
-      qDiv.classList.add(isCorrect ? 'exam-q-correct' : 'exam-q-wrong');
+  // Lock all inputs — read-only review mode
+  document.querySelectorAll('#exam-screen input[type="radio"], #exam-screen input[type="text"]')
+    .forEach(el => { el.disabled = true; });
 
-      // Highlight options
-      const radios = qDiv.querySelectorAll('input[type="radio"]');
-      radios.forEach(r => { r.disabled = true; });
-      const labels = qDiv.querySelectorAll('.exam-opt-label');
-      labels.forEach((lbl, j) => {
-        if (j === q.ans) lbl.classList.add('exam-opt-correct');
-        if (j === selected && !isCorrect) lbl.classList.add('exam-opt-wrong');
-      });
+  const submitBtn = document.getElementById('exam-submit-btn');
+  if (submitBtn) submitBtn.style.display = 'none';
 
-      // Show explanation
-      if (q.explain) {
-        const explainDiv = document.createElement('div');
-        explainDiv.className = 'exam-explain';
-        explainDiv.style.cssText = 'font-size:0.82rem;color:var(--muted);margin-top:0.5rem;padding:0.5rem;background:rgba(255,255,255,0.03);border-radius:6px;';
-        explainDiv.textContent = q.explain;
-        qDiv.appendChild(explainDiv);
-      }
+  if (EX.graded) applyExamReview();
+}
+
+function applyExamReview() {
+  EX.questions.forEach((q, i) => {
+    const qDiv = document.getElementById('exam-q-' + i);
+    if (!qDiv) return;
+
+    const userAnswer = EX.answers[i];
+    // Text questions: correctness was computed at submit time; use QS.missed as source of truth
+    const isCorrect = q.type === 'text'
+      ? !QS.missed.some(m => m.id === q.id)
+      : userAnswer === q.ans;
+
+    qDiv.classList.add(isCorrect ? 'review-correct' : 'review-wrong');
+
+    // MC option highlighting
+    qDiv.querySelectorAll('.exam-opt-label').forEach((lbl, j) => {
+      if (j === q.ans)                    lbl.classList.add('is-correct-answer');
+      if (!isCorrect && j === userAnswer) lbl.classList.add('is-wrong-pick');
     });
 
-    // Hide submit button, show exit
-    const submitBtn = document.getElementById('exam-submit-btn');
-    if (submitBtn) submitBtn.style.display = 'none';
-  }
+    // Explanation block — wrong answers only
+    if (!isCorrect && q.explain) {
+      const wrap = document.createElement('div');
+      wrap.className = 'exam-review-explain';
+      const labelEl = document.createElement('div');
+      labelEl.className = 'explain-label';
+      labelEl.textContent = 'Why this was wrong';
+      const textEl = document.createElement('div');
+      textEl.className = 'explain-text';
+      textEl.textContent = q.explain;
+      wrap.appendChild(labelEl);
+      wrap.appendChild(textEl);
+      qDiv.appendChild(wrap);
+    }
+  });
 }
 
 // ══════════════════════════════════════════════
