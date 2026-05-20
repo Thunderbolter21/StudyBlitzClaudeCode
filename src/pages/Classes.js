@@ -221,8 +221,7 @@ export function openClassQuizPanel(deck, cls) {
   renderModeSelector(
     document.getElementById('cq-selector-wrap'),
     'cq',
-    deck,
-    { includeGameModes: true }
+    deck
   );
 }
 
@@ -231,6 +230,10 @@ function _launchClassQuizFromModal(deck, cls) {
   const mode = getSelectedMode('cq');
   const mem  = getMem();
 
+  // Read DOM values before removing the modal — after removal getElementById returns null
+  const rawCount = parseInt(document.getElementById('cq-count')?.value);
+  const tcSecs   = parseInt(document.getElementById('cq-tc-sel')?.value || '60');
+
   document.getElementById('cq-modal')?.remove();
 
   QS.deck = deck;
@@ -238,7 +241,7 @@ function _launchClassQuizFromModal(deck, cls) {
 
   if (mode === 'exam') {
     const n = Math.min(
-      Math.max(5, parseInt(document.getElementById('cq-count')?.value || deck.questions.length)),
+      Math.max(5, isNaN(rawCount) ? deck.questions.length : rawCount),
       deck.questions.length
     );
     launchExam(deck.id, n);
@@ -246,14 +249,14 @@ function _launchClassQuizFromModal(deck, cls) {
   }
 
   if (mode === 'timechallenge') {
-    QS.tcSecs    = parseInt(document.getElementById('cq-tc-sel')?.value || '60');
+    QS.tcSecs    = tcSecs;
     QS.questions = [...deck.questions].sort(() => Math.random() - 0.5);
     startQS();
     return;
   }
 
   const n = Math.min(
-    Math.max(5, parseInt(document.getElementById('cq-count')?.value || '20')),
+    Math.max(5, isNaN(rawCount) ? deck.questions.length : rawCount),
     deck.questions.length
   );
 

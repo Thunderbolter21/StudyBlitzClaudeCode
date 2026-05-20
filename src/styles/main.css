@@ -195,23 +195,6 @@ select:disabled{opacity:0.4;cursor:not-allowed;}
 .mode-card-sub{font-size:0.72rem;color:var(--muted);margin-left:auto;text-align:right;max-width:160px;}
 .mode-card-sm{padding:0.6rem 0.8rem;}
 .mode-card-sm .mode-card-sub{display:none;}
-.mode-sub-settings{display:none;flex-direction:column;gap:0.4rem;margin-top:0.6rem;padding-top:0.6rem;border-top:1px solid var(--border);}
-.mode-card:has(input[type="radio"]:checked) .mode-sub-settings{display:flex;}
-.mode-card.selected .mode-sub-settings{display:flex;}
-.sub-toggle{display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text);cursor:pointer;padding:0.3rem 0;}
-.sub-toggle input[type="checkbox"]{width:16px;height:16px;accent-color:var(--accent);flex-shrink:0;}
-.sub-hint{font-size:0.68rem;color:var(--muted);margin-left:auto;}
-.game-modes-disclosure{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-top:0.5rem;}
-.game-modes-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;padding:0.7rem 1rem;background:var(--surface);border:none;color:var(--muted);font-size:0.85rem;font-family:'Sora',sans-serif;cursor:pointer;transition:color 0.15s;}
-.game-modes-toggle:hover{color:var(--text);}
-.gm-chevron{font-size:0.7rem;transition:transform 0.2s;}
-.game-modes-disclosure.open .gm-chevron{transform:rotate(180deg);}
-.game-modes-panel{display:none;flex-direction:column;gap:0.4rem;padding:0.6rem;background:var(--surface);border-top:1px solid var(--border);}
-.game-modes-disclosure.open .game-modes-panel{display:flex;}
-.game-modes-disclosure:has(input[type="radio"]:checked){border-color:var(--accent);}
-.game-modes-disclosure:has(input[type="radio"]:checked) .game-modes-toggle{color:var(--accent);}
-.game-modes-disclosure.gm-active{border-color:var(--accent);}
-.game-modes-disclosure.gm-active .game-modes-toggle{color:var(--accent);}
 
 /* ── QUIZ BUILDER METHOD TABS ── */
 .method-tabs{display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;margin-bottom:1.5rem;}
@@ -422,5 +405,4 @@ select:disabled{opacity:0.4;cursor:not-allowed;}
   .nav-item{padding:0.85rem 1.2rem;}
   .mode-card-sub{display:none;}
   .mode-card-inner{gap:0.5rem;}
-  .game-modes-toggle{font-size:0.8rem;}
 }

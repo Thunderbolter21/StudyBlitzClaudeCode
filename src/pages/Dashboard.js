@@ -16,8 +16,6 @@ export function initDashboardCallbacks({ nav }) {
 
 const MODE_LABELS = {
   standard: 'Standard',
-  speed: 'Speed Bonus',
-  streak: 'Streak Mode',
   drill: 'Drill',
   timechallenge: 'Time Challenge',
   exam: 'Exam Mode'

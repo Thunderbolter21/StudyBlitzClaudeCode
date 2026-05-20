@@ -89,14 +89,6 @@ export function launchQuiz() {
   const modeEl = document.querySelector('input[name="quiz-mode"]:checked');
   let mode = modeEl ? modeEl.value : 'standard';
 
-  // Resolve Practice sub-settings — speed takes priority over streak
-  if (mode === 'standard') {
-    const speedOn  = document.getElementById('opt-speed')?.checked;
-    const streakOn = document.getElementById('opt-streak')?.checked;
-    if (speedOn)       mode = 'speed';
-    else if (streakOn) mode = 'streak';
-  }
-
   if (mode === 'exam') {
     const countEl = document.getElementById('qs-count');
     const n = countEl ? Math.min(parseInt(countEl.value) || deck.questions.length, deck.questions.length) : undefined;
@@ -129,7 +121,6 @@ export function launchQuiz() {
     return;
   }
 
-  // standard, speed, streak
   const countEl = document.getElementById('qs-count');
   const n = countEl ? Math.min(parseInt(countEl.value) || 20, deck.questions.length) : Math.min(20, deck.questions.length);
   QS.deck = deck;
@@ -264,7 +255,7 @@ export function startQS() {
 
   const isTC = QS.mode === 'timechallenge';
   const timerBox = document.getElementById('q-timer-box');
-  if (timerBox) timerBox.style.display = (QS.mode === 'speed' || isTC) ? 'block' : 'none';
+  if (timerBox) timerBox.style.display = isTC ? 'block' : 'none';
 
   const qNumStat = document.getElementById('q-num')?.closest('.hud-stat');
   if (qNumStat) qNumStat.style.display = isTC ? 'none' : '';
@@ -329,22 +320,6 @@ export function renderQ() {
     optsEl.appendChild(btn);
   });
 
-  if (QS.mode === 'speed') startTimer();
-}
-
-export function startTimer() {
-  clearInterval(QS.timer);
-  let secs = 15;
-  const timerEl = document.getElementById('q-timer');
-  if (timerEl) timerEl.textContent = secs;
-  QS.timer = setInterval(() => {
-    secs--;
-    if (timerEl) timerEl.textContent = secs;
-    if (secs <= 0) {
-      clearInterval(QS.timer);
-      answerQ(-1);
-    }
-  }, 1000);
 }
 
 export function startTCTimer() {
@@ -586,15 +561,8 @@ export function showResults() {
   const correctEl = document.getElementById('res-correct');
   if (correctEl) correctEl.textContent = pct + '%';
 
-  // Streak stat
   const streakStat = document.getElementById('res-streak-stat');
-  const streakEl = document.getElementById('res-streak');
-  if (QS.mode === 'streak' || QS.mode === 'speed') {
-    if (streakStat) streakStat.style.display = '';
-    if (streakEl) streakEl.textContent = QS.bestStreak;
-  } else {
-    if (streakStat) streakStat.style.display = 'none';
-  }
+  if (streakStat) streakStat.style.display = 'none';
 
   // Missed panel
   const missedPanel = document.getElementById('res-missed-panel');

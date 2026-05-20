@@ -140,18 +140,6 @@
                     <div class="mode-card-label">Practice</div>
                     <div class="mode-card-sub">Adaptive MC · feedback after each answer</div>
                   </div>
-                  <div class="mode-sub-settings" id="practice-sub">
-                    <label class="sub-toggle">
-                      <input type="checkbox" id="opt-speed">
-                      <span>⚡ Speed Bonus</span>
-                      <span class="sub-hint">Timer per question</span>
-                    </label>
-                    <label class="sub-toggle">
-                      <input type="checkbox" id="opt-streak">
-                      <span>🔥 Streak Mode</span>
-                      <span class="sub-hint">Multiplier on streaks</span>
-                    </label>
-                  </div>
                 </label>
 
                 <!-- Weak Spots -->
@@ -174,40 +162,16 @@
                   </div>
                 </label>
 
-              </div>
+                <!-- Time Challenge -->
+                <label class="mode-card" id="mc-timechallenge">
+                  <input type="radio" name="quiz-mode" value="timechallenge">
+                  <div class="mode-card-inner">
+                    <div class="mode-card-icon">⏱️</div>
+                    <div class="mode-card-label">Time Challenge</div>
+                    <div class="mode-card-sub">Race the clock · high scores</div>
+                  </div>
+                </label>
 
-              <!-- Game Modes disclosure -->
-              <div class="game-modes-disclosure" id="qs-game-modes">
-                <button class="game-modes-toggle" onclick="toggleGameModes(event)" type="button">
-                  <span>⚡ Other Game Modes</span>
-                  <span class="gm-chevron">▼</span>
-                </button>
-                <div class="game-modes-panel" id="gm-panel">
-                  <label class="mode-card mode-card-sm">
-                    <input type="radio" name="quiz-mode" value="timechallenge">
-                    <div class="mode-card-inner">
-                      <div class="mode-card-icon">⏱️</div>
-                      <div class="mode-card-label">Time Challenge</div>
-                      <div class="mode-card-sub">Race the clock · high scores</div>
-                    </div>
-                  </label>
-                  <label class="mode-card mode-card-sm">
-                    <input type="radio" name="quiz-mode" value="speed">
-                    <div class="mode-card-inner">
-                      <div class="mode-card-icon">⚡</div>
-                      <div class="mode-card-label">Speed Bonus</div>
-                      <div class="mode-card-sub">Timer per question · fast = more points</div>
-                    </div>
-                  </label>
-                  <label class="mode-card mode-card-sm">
-                    <input type="radio" name="quiz-mode" value="streak">
-                    <div class="mode-card-inner">
-                      <div class="mode-card-icon">🔥</div>
-                      <div class="mode-card-label">Streak Mode</div>
-                      <div class="mode-card-sub">Points multiply on consecutive correct answers</div>
-                    </div>
-                  </label>
-                </div>
               </div>
 
             </div>
