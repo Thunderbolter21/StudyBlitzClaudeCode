@@ -57,37 +57,77 @@ export function switchTab(tab) {
 export function buildPromptText(notesText, count, instructionsText = '') {
   const deckName = document.getElementById('gen-name')?.value?.trim() || 'Study Deck';
   const instr    = instructionsText.trim();
-  const instrBlock = instr
-    ? `\n--- SPECIAL INSTRUCTIONS FROM THE USER ---\n${instr}\nThese instructions override the defaults above where they conflict. Follow them precisely.\n--- END SPECIAL INSTRUCTIONS ---\n`
-    : '';
-  const notesBlock = notesText.trim()
-    ? `\n\nADDITIONAL NOTES FROM THE USER:\n${notesText.trim()}`
-    : '';
+  const instrBlock = instr ? `\n<special_instructions>\n${instr}\nThese instructions take priority where they conflict with the defaults above. Follow them precisely.\n</special_instructions>\n` : '';
   const studyMaterial = notesText.trim() || '(see attached files above)';
-  return `You are a quiz question generator for a study app called StudyBlitz. Generate exactly ${count} multiple-choice quiz questions based on the study material below.
 
-SUBJECT/DECK: ${deckName}
+  return `<role>
+You are an expert exam writer with 15 years of experience writing multiple-choice assessments for college courses. You write questions that test genuine understanding, not pattern recognition. Your distractors are plausible to a student who partially understands the material. Your correct answers are never identifiable by length, specificity, or phrasing alone.
+</role>
 
-REQUIREMENTS:
-- Each question must have exactly 4 answer options
-- Questions should test understanding, not just memorization
-- Include a mix of difficulty levels
-- Cover the material comprehensively
-- Provide a brief explanation for each correct answer
-- Categorize each question by topic/subtopic
+<task>
+Generate EXACTLY ${count} multiple-choice questions for a study deck called "${deckName}" from the material below.
+Output ONLY a raw JSON array — no explanation, no markdown fences, no text before or after.
+The first character of your response must be [ and the last must be ].
+</task>
 
-IMPORTANT: Respond with ONLY a valid JSON array (no markdown, no code fences, no extra text). Each object must have exactly these fields:
-- "q" (string): the question text
-- "cat" (string): category/topic
-- "opts" (array of 4 strings): the answer options
-- "ans" (number 0-3): index of the correct answer
-- "explain" (string): brief explanation of the correct answer
-${instrBlock}
----
+<critical_rules>
+ANSWER POSITION — Before writing each question, mentally commit to a random position (0, 1, 2, or 3) as the correct answer slot. Write the options so the correct answer falls in that slot. Across all ${count} questions, correct answers must be distributed roughly equally across positions 0, 1, 2, and 3. Never default to position 1.
+
+ANSWER LENGTH — All four options in a question must be within 5 words of each other in length. If your correct answer runs 10 words, every distractor must run 5–15 words. Never make the correct answer more detailed, more specific, or more qualified than the distractors.
+
+DISTRACTOR QUALITY — Each wrong answer must be plausible to a student who partially knows the topic. Use specific terms, numbers, and concepts from the material in distractors. Never use "all of the above" or "none of the above."
+
+COVERAGE — Spread questions across all major topics in the material. No single section should account for more than 30% of questions.
+</critical_rules>
+
+<output_format>
+Each question object must have exactly these fields:
+{
+  "q": "Question text ending with a question mark?",
+  "cat": "Short Topic Label",
+  "opts": ["Option A", "Option B", "Option C", "Option D"],
+  "ans": 2,
+  "explain": "One sentence explaining why the correct answer is right."
+}
+"ans" is the 0-based index of the correct answer in "opts" — must be a NUMBER (0, 1, 2, or 3).
+</output_format>
+
+<examples>
+GOOD — all four options at similar length, correct answer not identifiable by detail:
+{
+  "q": "What does the Federal Reserve primarily adjust to control inflation?",
+  "opts": [
+    "The federal funds interest rate target",
+    "The maximum price ceiling on groceries",
+    "The annual federal government deficit limit",
+    "The reserve requirement for commercial banks"
+  ],
+  "ans": 0,
+  "explain": "The Fed raises the federal funds rate to raise borrowing costs, reducing spending and cooling inflation."
+}
+
+BAD — correct answer is obviously longer and more detailed than the distractors:
+{
+  "q": "What causes inflation?",
+  "opts": [
+    "Too much money",
+    "High taxes",
+    "When the supply of money in an economy grows faster than the production of goods and services, causing prices to rise across the board",
+    "Government spending"
+  ],
+  "ans": 2
+}
+</examples>
+
+<thinking>
+Before writing questions:
+1. List the 4–6 main topics in the study material
+2. Decide how many questions per topic to reach exactly ${count} total
+3. For each question: commit to a random correct-answer position BEFORE writing any options, then write all four options at roughly equal length
+</thinking>
+${instrBlock}---
 STUDY MATERIAL:
-${studyMaterial}${notesBlock}
-
-Remember: Output ONLY the JSON array, nothing else.`;
+${studyMaterial}`;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -209,6 +249,30 @@ export function showFileUploadInstructions(imageFiles, pdfFiles, notesText, deck
 }
 
 /* ══════════════════════════════════════════════════════════════
+   ANSWER SHUFFLE
+   Randomises which slot holds the correct answer so Claude's
+   systematic bias toward position 1 (B) is neutralised at import.
+   ══════════════════════════════════════════════════════════ */
+
+function shuffleAnswerPositions(question) {
+  const numOpts = question.opts.length;
+  const indices = Array.from({ length: numOpts }, (_, i) => i);
+
+  // Fisher-Yates in-place shuffle
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+
+  // newOpts[i] = original opts at indices[i]
+  const newOpts = indices.map(i => question.opts[i]);
+  // The correct answer moved from question.ans to wherever indices[?] === question.ans
+  const newAns  = indices.indexOf(question.ans);
+
+  return { ...question, opts: newOpts, ans: newAns };
+}
+
+/* ══════════════════════════════════════════════════════════════
    JSON IMPORT
    ══════════════════════════════════════════════════════════ */
 
@@ -272,7 +336,7 @@ export function importFromJson() {
     return;
   }
 
-  generatedQuestions = valid;
+  generatedQuestions = valid.map(shuffleAnswerPositions);
   generatedDeckMeta = {
     name: document.getElementById('gen-name')?.value?.trim() || 'Imported Deck',
   };
@@ -757,6 +821,7 @@ export async function generateDeck() {
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 8192,
+        system: 'You are an expert exam writer. Follow these rules strictly: (1) Distribute correct answers evenly across positions 0, 1, 2, and 3 — never default to position 1. (2) Write all four options at similar length — the correct answer must not be longer, more detailed, or more qualified than the distractors. (3) Make distractors plausible to a student who partially understands the material — never use vague filler options.',
         messages: messages
       })
     });
@@ -803,7 +868,7 @@ export async function generateDeck() {
 
     if (valid.length === 0) throw new Error('No valid questions parsed from response');
 
-    generatedQuestions = valid;
+    generatedQuestions = valid.map(shuffleAnswerPositions);
     generatedDeckMeta = { name: deckName };
 
     if (statusText) statusText.textContent = `\u2713 Generated ${valid.length} questions!`;
