@@ -128,6 +128,8 @@ function initKeyboard() {
   document.addEventListener('keydown', (e) => {
     const qs = document.getElementById('quiz-screen');
     if (!qs || !qs.classList.contains('open')) return;
+    // Don't intercept keys when the free-response input is focused
+    if (document.activeElement && document.activeElement.id === 'fr-input') return;
     if (e.key === 'Enter' || e.key === ' ') {
       const next = document.getElementById('q-next');
       if (next && next.classList.contains('show')) { e.preventDefault(); quizNext(); }
