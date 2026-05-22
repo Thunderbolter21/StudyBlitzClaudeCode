@@ -2,7 +2,7 @@
 
 export const MKT300 = {
   id:'builtin-mkt300', name:'MKT 300 — Exam Two', subject:'Marketing', color:'#ff3f6c',
-  created: new Date().toISOString(), lastScore: null, builtIn: true, version: 2,
+  created: new Date().toISOString(), lastScore: null, builtIn: true, version: 3,
   questions:[
     {id:'mr1',cat:"Marketing Research",q:"Which type of research uses open-ended interviews and focus groups to explore ideas?",opts:["Quantitative","Qualitative","Conclusive","Experimental"],ans:1,explain:"Qualitative research uses open-ended, exploratory methods like interviews and focus groups."},
     {id:'mr2',cat:"Marketing Research",q:"Exploratory research typically leads to which type of research?",opts:["Descriptive only","More exploratory","Conclusive research","Secondary research"],ans:2,explain:"Exploratory research generates hypotheses that inform conclusive research."},
@@ -45,7 +45,5 @@ export const MKT300 = {
     {id:'sg5',cat:"Segmentation & Targeting",q:"A perceptual map helps marketers:",opts:["Set production schedules","Visualize how consumers perceive brands on key attributes","Track inventory","Determine headcount"],ans:1,explain:"Perceptual maps reveal competitive positioning and gaps in consumers' minds."},
     {id:'sg6',cat:"Segmentation & Targeting",q:"The axes on a perceptual map are chosen based on:",opts:["Management preference","Random selection","Attributes consumers use to evaluate brands","Competitor pricing"],ans:2,explain:"Axes must reflect what consumers actually use to compare brands in the category."},
     {id:'sg7',cat:"Segmentation & Targeting",q:"A niche targeting strategy is most effective when:",opts:["The market is homogeneous","Scale is the goal","A distinct segment exists that large competitors overlook","All consumers are identical"],ans:2,explain:"Niche strategies serve specialized segments where big competitors aren't competing well."},
-    {id:'test-fr-1',type:'free-response',cat:'Test',q:'The ___ algorithm is used in StudyBlitz for spaced repetition.',ans:['sm-2','sm2','supermemo 2','supermemo-2'],explain:'SM-2 calculates optimal review intervals.'},
-    {id:'test-ms-1',type:'multi-select',cat:'Test',q:'Which of the following are primary colors? Select all that apply.',opts:['Red','Green','Blue','Orange'],ans:[0,2],explain:'Red and Blue are primary colors in the additive model.'},
   ]
 };
