@@ -19,8 +19,9 @@ export function initQuizCallbacks({ toast, refreshAll, nav, refreshDashboard, re
 
 // ── Question type helpers ──
 function getQType(q) {
-  if (q.type === 'free-response') return 'free-response';
-  if (q.type === 'multi-select')  return 'multi-select';
+  const t = (q.type || '').toLowerCase().replace(/[\s_]/g, '-').trim();
+  if (t === 'free-response' || t === 'freeresponse') return 'free-response';
+  if (t === 'multi-select'  || t === 'multiselect')  return 'multi-select';
   return 'mc';
 }
 
