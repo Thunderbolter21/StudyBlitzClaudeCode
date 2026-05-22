@@ -17,12 +17,18 @@ let _decksCache = null;
 
 export async function initBuiltins() {
   const decks = load(KEYS.decks) || [];
-  if (!decks.find(d => d.id === 'builtin-mkt300')) {
-    const { MKT300 } = await import('./mkt300.js');
+  const { MKT300 } = await import('./mkt300.js');
+  const storedIdx = decks.findIndex(d => d.id === 'builtin-mkt300');
+  if (storedIdx === -1) {
     decks.unshift({ ...MKT300 });
-    save(KEYS.decks, decks);
-    _decksCache = decks;
+  } else if ((decks[storedIdx].version || 0) < (MKT300.version || 1)) {
+    // Built-in updated — replace stored copy, preserving lastScore
+    decks[storedIdx] = { ...MKT300, lastScore: decks[storedIdx].lastScore };
+  } else {
+    return; // already up to date
   }
+  save(KEYS.decks, decks);
+  _decksCache = decks;
 }
 
 export function getDecks() {

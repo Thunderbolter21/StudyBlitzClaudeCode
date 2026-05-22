@@ -2,7 +2,7 @@
 
 export const MKT300 = {
   id:'builtin-mkt300', name:'MKT 300 — Exam Two', subject:'Marketing', color:'#ff3f6c',
-  created: new Date().toISOString(), lastScore: null, builtIn: true,
+  created: new Date().toISOString(), lastScore: null, builtIn: true, version: 2,
   questions:[
     {id:'mr1',cat:"Marketing Research",q:"Which type of research uses open-ended interviews and focus groups to explore ideas?",opts:["Quantitative","Qualitative","Conclusive","Experimental"],ans:1,explain:"Qualitative research uses open-ended, exploratory methods like interviews and focus groups."},
     {id:'mr2',cat:"Marketing Research",q:"Exploratory research typically leads to which type of research?",opts:["Descriptive only","More exploratory","Conclusive research","Secondary research"],ans:2,explain:"Exploratory research generates hypotheses that inform conclusive research."},
