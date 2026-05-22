@@ -59,15 +59,15 @@ export function refreshClasses() {
     const body = document.createElement('div');
     body.className = 'class-body';
 
-    // Quiz action
-    const quizAction = document.createElement('button');
-    quizAction.className = 'class-action';
-    quizAction.innerHTML = '<span class="ca-icon">\uD83C\uDFAE</span> Take a Quiz';
-    const quizSub = document.createElement('div');
-    quizSub.className = 'class-action-sub';
-
+    // Deck card grid \u2014 visible immediately when class body opens
     if (classDecks.length === 0) {
-      quizSub.innerHTML = '<div style="font-size:0.8rem;color:var(--muted);padding:0.4rem 0.8rem;">No decks assigned to this class yet.</div>';
+      const empty = document.createElement('div');
+      empty.style.cssText = 'font-size:0.82rem;color:var(--muted);padding:0.6rem 0;text-align:center;';
+      empty.innerHTML = `No decks assigned to this class yet.<br>
+        <button class="btn btn-ghost btn-sm" style="margin-top:0.5rem;font-size:0.78rem;" onclick="nav('generator')">
+          \uD83D\uDEE0\uFE0F Build a Deck
+        </button>`;
+      body.appendChild(empty);
     } else {
       const cardGrid = document.createElement('div');
       cardGrid.className = 'class-deck-grid';
@@ -80,53 +80,18 @@ export function refreshClasses() {
         }
         cardGrid.appendChild(deckCard);
       });
-      quizSub.appendChild(cardGrid);
+      body.appendChild(cardGrid);
     }
 
-    // Drill action
-    const drillAction = document.createElement('button');
-    drillAction.className = 'class-action';
-    drillAction.innerHTML = '<span class="ca-icon">\uD83C\uDFAF</span> Drill Weak Spots' +
-      (weakQs.length ? ` <span style="margin-left:auto;color:var(--accent);font-size:0.75rem;">${weakQs.length} weak</span>` : '');
-    const drillSub = document.createElement('div');
-    drillSub.className = 'class-action-sub';
-    const drillOptsDiv = document.createElement('div');
-    drillOptsDiv.className = 'class-drill-opts';
-
-    if (weakQs.length === 0) {
-      drillSub.innerHTML = '<div style="font-size:0.8rem;color:var(--muted);padding:0.4rem 0.8rem;">No weak spots in this class yet!</div>';
-    } else {
-      const mixBtn = document.createElement('button');
-      mixBtn.className = 'btn btn-primary btn-sm';
-      mixBtn.style.fontSize = '0.75rem';
-      mixBtn.textContent = '\uD83D\uDD00 Mix All (' + weakQs.length + ')';
-      mixBtn.onclick = () => drillClassMixed(cls.id);
-      drillOptsDiv.appendChild(mixBtn);
-
-      const decksWithWeak = classDecks.filter(d => d.questions.some(q => isWeak(getRec(mem, q.id))));
-      decksWithWeak.forEach(deck => {
-        const dw = deck.questions.filter(q => isWeak(getRec(mem, q.id))).length;
-        const db = document.createElement('button');
-        db.className = 'btn btn-ghost btn-sm';
-        db.style.fontSize = '0.75rem';
-        db.textContent = (deck.name.length > 22 ? deck.name.substring(0, 20) + '\u2026' : deck.name) + ' (' + dw + ')';
-        db.onclick = () => drillClassMixed(cls.id, deck.id);
-        drillOptsDiv.appendChild(db);
-      });
-      drillSub.appendChild(drillOptsDiv);
+    // Single drill button \u2014 only shown when class has weak spots
+    if (weakQs.length > 0) {
+      const drillBtn = document.createElement('button');
+      drillBtn.className = 'btn btn-ghost btn-sm';
+      drillBtn.style.cssText = 'width:100%;justify-content:center;margin-top:0.8rem;border-style:dashed;color:var(--accent);border-color:var(--accent);';
+      drillBtn.innerHTML = `\uD83C\uDFAF Drill All Weak Spots in This Class <span style="margin-left:0.4rem;color:var(--muted);font-size:0.75rem;">(${weakQs.length})</span>`;
+      drillBtn.onclick = () => drillClassMixed(cls.id);
+      body.appendChild(drillBtn);
     }
-
-    // Toggle handlers
-    quizAction.onclick = () => {
-      quizSub.classList.toggle('open');
-      drillSub.classList.remove('open');
-      drillOptsDiv.classList.remove('open');
-    };
-    drillAction.onclick = () => {
-      drillSub.classList.toggle('open');
-      drillOptsDiv.classList.toggle('open');
-      quizSub.classList.remove('open');
-    };
 
     hdr.addEventListener('click', (e) => {
       if (e.target.closest('.btn')) return;
@@ -142,11 +107,6 @@ export function refreshClasses() {
         window.openClassMenu(cls.id);
       };
     }
-
-    body.appendChild(quizAction);
-    body.appendChild(quizSub);
-    body.appendChild(drillAction);
-    body.appendChild(drillSub);
     card.appendChild(hdr);
     card.appendChild(body);
     content.appendChild(card);
