@@ -65,7 +65,7 @@ You are an expert exam writer with 15 years of experience writing multiple-choic
 </role>
 
 <task>
-Generate EXACTLY ${count} multiple-choice questions for a study deck called "${deckName}" from the material below.
+Generate EXACTLY ${count} questions (a mix of mc, multi-select, and free-response types) for a study deck called "${deckName}" from the material below.
 Output ONLY a raw JSON array — no explanation, no markdown fences, no text before or after.
 The first character of your response must be [ and the last must be ].
 </task>
@@ -80,22 +80,51 @@ DISTRACTOR QUALITY — Each wrong answer must be plausible to a student who part
 COVERAGE — Spread questions across all major topics in the material. No single section should account for more than 30% of questions.
 </critical_rules>
 
-<output_format>
-Each question object must have exactly these fields:
+<question_types>
+Generate a mix of all three question types. Aim for roughly 60% mc, 25% multi-select, 15% free-response.
+
+TYPE 1 — Multiple Choice (mc):
 {
   "q": "Question text ending with a question mark?",
+  "type": "mc",
   "cat": "Short Topic Label",
   "opts": ["Option A", "Option B", "Option C", "Option D"],
   "ans": 2,
   "explain": "One sentence explaining why the correct answer is right."
 }
-"ans" is the 0-based index of the correct answer in "opts" — must be a NUMBER (0, 1, 2, or 3).
-</output_format>
+"ans" is a single NUMBER (0–3), the index of the correct option.
+
+TYPE 2 — Multiple Correct Answers (multi-select):
+{
+  "q": "Which of the following are characteristics of X? (Select all that apply)",
+  "type": "multi-select",
+  "cat": "Short Topic Label",
+  "opts": ["Option A", "Option B", "Option C", "Option D"],
+  "ans": [0, 2],
+  "explain": "Options A and C are correct because..."
+}
+"ans" is an ARRAY of correct indices (minimum 2, maximum 3 correct answers).
+Always signal multiple answers in the question: "Which of the following…", "Select all that apply", "Which THREE of these…"
+
+TYPE 3 — Free Response:
+{
+  "q": "The ___ is the powerhouse of the cell.",
+  "type": "free-response",
+  "cat": "Short Topic Label",
+  "opts": null,
+  "ans": ["mitochondria", "mitochondrion", "the mitochondria"],
+  "explain": "The mitochondria produces ATP through cellular respiration."
+}
+"ans" is an ARRAY of accepted answer variants (2–4 variants covering common spellings and phrasings).
+Use fill-in-the-blank style with ___ OR "What is the term for…" style.
+The answer must be a SHORT phrase (1–4 words max).
+</question_types>
 
 <examples>
-GOOD — all four options at similar length, correct answer not identifiable by detail:
+GOOD MC — all four options at similar length, correct answer not identifiable by detail:
 {
   "q": "What does the Federal Reserve primarily adjust to control inflation?",
+  "type": "mc",
   "opts": [
     "The federal funds interest rate target",
     "The maximum price ceiling on groceries",
@@ -106,7 +135,7 @@ GOOD — all four options at similar length, correct answer not identifiable by 
   "explain": "The Fed raises the federal funds rate to raise borrowing costs, reducing spending and cooling inflation."
 }
 
-BAD — correct answer is obviously longer and more detailed than the distractors:
+BAD MC — correct answer is obviously longer and more detailed than the distractors:
 {
   "q": "What causes inflation?",
   "opts": [
@@ -254,22 +283,27 @@ export function showFileUploadInstructions(imageFiles, pdfFiles, notesText, deck
    systematic bias toward position 1 (B) is neutralised at import.
    ══════════════════════════════════════════════════════════ */
 
-function shuffleAnswerPositions(question) {
-  const numOpts = question.opts.length;
-  const indices = Array.from({ length: numOpts }, (_, i) => i);
+function _getQType(q) {
+  if (q.type === 'free-response') return 'free-response';
+  if (q.type === 'multi-select')  return 'multi-select';
+  return 'mc';
+}
 
-  // Fisher-Yates in-place shuffle
+function shuffleAnswerPositions(question) {
+  const type = _getQType(question);
+  if (type === 'free-response') return { ...question };
+  const q = { ...question };
+  const len = (q.opts || []).length;
+  if (!len) return q;
+  const indices = Array.from({ length: len }, (_, i) => i);
   for (let i = indices.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [indices[i], indices[j]] = [indices[j], indices[i]];
   }
-
-  // newOpts[i] = original opts at indices[i]
-  const newOpts = indices.map(i => question.opts[i]);
-  // The correct answer moved from question.ans to wherever indices[?] === question.ans
-  const newAns  = indices.indexOf(question.ans);
-
-  return { ...question, opts: newOpts, ans: newAns };
+  const newOpts = indices.map(i => q.opts[i]);
+  if (type === 'mc') return { ...q, opts: newOpts, ans: indices.indexOf(q.ans) };
+  if (type === 'multi-select') return { ...q, opts: newOpts, ans: (q.ans || []).map(ci => indices.indexOf(ci)) };
+  return { ...q, opts: newOpts };
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -310,25 +344,41 @@ export function importFromJson() {
     return;
   }
 
-  // Validate and normalize questions
+  // Validate and normalize questions — handles mc, multi-select, and free-response
   const valid = [];
   parsed.forEach((item, i) => {
-    if (!item.q || !item.opts || !Array.isArray(item.opts) || item.opts.length < 2) return;
-    // Ensure 4 options
-    while (item.opts.length < 4) item.opts.push('(no option)');
-    if (item.opts.length > 4) item.opts = item.opts.slice(0, 4);
-    // Normalize ans
-    let ans = parseInt(item.ans);
-    if (isNaN(ans) || ans < 0 || ans > 3) ans = 0;
+    if (!item.q || !String(item.q).trim()) return;
+    const type = (() => { const t = (item.type || '').toLowerCase().replace(/[\s_]/g, '-').trim(); if (t === 'free-response' || t === 'freeresponse') return 'free-response'; if (t === 'multi-select' || t === 'multiselect') return 'multi-select'; return 'mc'; })();
+    const base = { id: 'gen-' + Date.now() + '-' + i, q: String(item.q), cat: String(item.cat || 'General'), explain: String(item.explain || '') };
 
-    valid.push({
-      id: 'gen-' + Date.now() + '-' + i,
-      q: String(item.q),
-      cat: String(item.cat || 'General'),
-      opts: item.opts.map(o => String(o)),
-      ans: ans,
-      explain: String(item.explain || '')
-    });
+    if (type === 'free-response') {
+      let ans = Array.isArray(item.ans) ? item.ans : (typeof item.ans === 'string' ? [item.ans] : []);
+      ans = ans.map(a => String(a).toLowerCase().trim()).filter(a => a.length > 0);
+      if (!ans.length) return;
+      valid.push({ ...base, type: 'free-response', ans });
+
+    } else if (type === 'multi-select') {
+      if (!Array.isArray(item.opts)) return;
+      let opts = item.opts.map(o => String(o || '')).filter(o => o.trim().length > 0);
+      if (opts.length < 2) return;
+      while (opts.length < 4) opts.push('—');
+      if (opts.length > 4) opts = opts.slice(0, 4);
+      if (!Array.isArray(item.ans) || item.ans.length === 0) return;
+      const ans = item.ans.map(a => parseInt(a)).filter(a => !isNaN(a) && a >= 0 && a < opts.length);
+      if (!ans.length) return;
+      valid.push({ ...base, type: 'multi-select', opts, ans });
+
+    } else {
+      // MC (default)
+      if (!Array.isArray(item.opts)) return;
+      let opts = item.opts.map(o => String(o || '')).filter(o => o.trim().length > 0);
+      if (opts.length < 2) return;
+      while (opts.length < 4) opts.push('—');
+      if (opts.length > 4) opts = opts.slice(0, 4);
+      let ans = parseInt(item.ans);
+      if (isNaN(ans) || ans < 0 || ans > 3) ans = 0;
+      valid.push({ ...base, opts, ans });
+    }
   });
 
   if (valid.length === 0) {
@@ -821,7 +871,29 @@ export async function generateDeck() {
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 8192,
-        system: 'You are an expert exam writer. Follow these rules strictly: (1) Distribute correct answers evenly across positions 0, 1, 2, and 3 — never default to position 1. (2) Write all four options at similar length — the correct answer must not be longer, more detailed, or more qualified than the distractors. (3) Make distractors plausible to a student who partially understands the material — never use vague filler options.',
+        system: `You are an expert exam writer. Generate a mix of these question types based on the study material and any special instructions provided. Aim for roughly 60% mc, 25% multi-select, 15% free-response unless instructions specify otherwise.
+
+TYPE 1 - Multiple Choice (mc):
+{"q":"Question?","type":"mc","cat":"Topic","opts":["Option A","Option B","Option C","Option D"],"ans":2,"explain":"Why correct."}
+ans is a NUMBER (0-3). Distribute correct answers evenly across positions 0-3, never default to position 1.
+
+TYPE 2 - Multiple Correct Answers (multi-select):
+{"q":"Which of the following are examples of X? Select all that apply.","type":"multi-select","cat":"Topic","opts":["Option A","Option B","Option C","Option D"],"ans":[0,2],"explain":"A and C are correct because..."}
+ans is an ARRAY of correct index numbers (2-3 correct answers). opts must always have exactly 4 non-empty strings.
+
+TYPE 3 - Free Response:
+{"q":"The ___ is responsible for X in the cell.","type":"free-response","cat":"Topic","opts":null,"ans":["mitochondria","the mitochondria","mitochondrion"],"explain":"The mitochondria produces ATP."}
+ans is an ARRAY of 2-4 accepted answer variants. opts must be null. Question must use ___ fill-in-the-blank or start with "What term..." / "Name the...". Answer must be 1-4 words.
+
+CRITICAL RULES:
+- opts must NEVER be an empty array [], NEVER contain empty strings "", NEVER be undefined
+- For mc and multi-select: opts must have exactly 4 meaningful non-empty answer choices
+- For free-response: opts must be null (not [] or undefined)
+- ans for mc: single number 0-3
+- ans for multi-select: array of numbers
+- ans for free-response: array of strings
+- Every question must have a non-empty explain field
+- Output only a raw JSON array, no markdown fences`,
         messages: messages
       })
     });
@@ -847,23 +919,38 @@ export async function generateDeck() {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('Invalid response format');
 
-    // Normalize questions
+    // Normalize questions — handles mc, multi-select, and free-response
     const valid = [];
     parsed.forEach((item, i) => {
-      if (!item.q || !item.opts || !Array.isArray(item.opts)) return;
-      while (item.opts.length < 4) item.opts.push('(no option)');
-      if (item.opts.length > 4) item.opts = item.opts.slice(0, 4);
-      let ans = parseInt(item.ans);
-      if (isNaN(ans) || ans < 0 || ans > 3) ans = 0;
+      if (!item.q || !String(item.q).trim()) return;
+      const type = (() => { const t = (item.type || '').toLowerCase().replace(/[\s_]/g, '-').trim(); if (t === 'free-response' || t === 'freeresponse') return 'free-response'; if (t === 'multi-select' || t === 'multiselect') return 'multi-select'; return 'mc'; })();
+      const base = { id: 'gen-' + Date.now() + '-' + i, q: String(item.q), cat: String(item.cat || 'General'), explain: String(item.explain || '') };
 
-      valid.push({
-        id: 'gen-' + Date.now() + '-' + i,
-        q: String(item.q),
-        cat: String(item.cat || 'General'),
-        opts: item.opts.map(o => String(o)),
-        ans: ans,
-        explain: String(item.explain || '')
-      });
+      if (type === 'free-response') {
+        let ans = Array.isArray(item.ans) ? item.ans : (typeof item.ans === 'string' ? [item.ans] : []);
+        ans = ans.map(a => String(a).toLowerCase().trim()).filter(a => a.length > 0);
+        if (!ans.length) return;
+        valid.push({ ...base, type: 'free-response', ans });
+      } else if (type === 'multi-select') {
+        if (!Array.isArray(item.opts)) return;
+        let opts = item.opts.map(o => String(o || '')).filter(o => o.trim().length > 0);
+        if (opts.length < 2) return;
+        while (opts.length < 4) opts.push('—');
+        if (opts.length > 4) opts = opts.slice(0, 4);
+        if (!Array.isArray(item.ans) || item.ans.length === 0) return;
+        const ans = item.ans.map(a => parseInt(a)).filter(a => !isNaN(a) && a >= 0 && a < opts.length);
+        if (!ans.length) return;
+        valid.push({ ...base, type: 'multi-select', opts, ans });
+      } else {
+        if (!Array.isArray(item.opts)) return;
+        let opts = item.opts.map(o => String(o || '')).filter(o => o.trim().length > 0);
+        if (opts.length < 2) return;
+        while (opts.length < 4) opts.push('—');
+        if (opts.length > 4) opts = opts.slice(0, 4);
+        let ans = parseInt(item.ans);
+        if (isNaN(ans) || ans < 0 || ans > 3) ans = 0;
+        valid.push({ ...base, opts, ans });
+      }
     });
 
     if (valid.length === 0) throw new Error('No valid questions parsed from response');
