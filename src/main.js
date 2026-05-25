@@ -19,6 +19,7 @@ import {
   showTCResults, replayTC, closeTCResults,
   launchExam, renderExam, submitExam, exitExam,
   getAllWeakCount, renderFixButton, launchConfetti,
+  openFullscreenImg, closeFullscreenImg,
   initQuizCallbacks
 } from './engine/quiz.js';
 import { refreshDashboard, openKnowledgeBreakdown, closeKB, relaunchRecent, openReviewModal, initDashboardCallbacks, showGettingStarted } from './pages/Dashboard.js';
@@ -121,6 +122,8 @@ function exposeGlobals() {
   window.openAuthModal = openAuthModal;
   window.openGuestSignupModal = openGuestSignupModal;
   window.closeGuestSignupModal = closeGuestSignupModal;
+  window.openFullscreenImg = openFullscreenImg;
+  window.closeFullscreenImg = closeFullscreenImg;
 }
 
 // ── Keyboard handler ──
@@ -143,6 +146,14 @@ function initKeyboard() {
   });
 }
 
+// ── Fullscreen image overlay listeners ──
+function initFullscreenImage() {
+  const overlay = document.getElementById('img-fullscreen');
+  const closeBtn = document.getElementById('img-fullscreen-close');
+  if (overlay) overlay.addEventListener('click', (e) => { if (e.target === overlay) closeFullscreenImg(); });
+  if (closeBtn) closeBtn.addEventListener('click', closeFullscreenImg);
+}
+
 // ── Close dropdown menus on outside click ──
 function initClickOutside() {
   document.addEventListener('click', (e) => {
@@ -159,6 +170,7 @@ async function boot() {
   exposeGlobals();
   initNavListeners();
   initKeyboard();
+  initFullscreenImage();
   initClickOutside();
   setupDropZone();
   updateKeyBadge();

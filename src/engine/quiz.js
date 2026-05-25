@@ -595,6 +595,7 @@ export function answerQ(idx, _override = null) {
     }
     if (fbTitle) fbTitle.textContent = wrongMsg;
     if (fbExplain) fbExplain.textContent = (q.explain || '') + ' — Added to weak spots.';
+    if (q.sourceImage) setTimeout(() => showSourceImageThumbnail(q), 50);
   }
 
   const hudCC = document.getElementById('q-correct-count');
@@ -1022,6 +1023,25 @@ function applyExamReview() {
     }
 
     qDiv.classList.add(isCorrect ? 'review-correct' : 'review-wrong');
+
+    // Source image thumbnail for wrong answers
+    if (!isCorrect && q.sourceImage) {
+      const thumbWrap = document.createElement('div');
+      thumbWrap.className = 'source-img-wrap';
+      thumbWrap.style.marginTop = '0.6rem';
+      const lbl = document.createElement('div');
+      lbl.className = 'source-img-label';
+      lbl.textContent = '📎 Source reference';
+      const thumb = document.createElement('img');
+      thumb.className = 'source-img-thumb';
+      thumb.alt = 'Source reference';
+      thumb.title = 'Click to expand';
+      thumb.src = q.sourceImage;
+      thumb.addEventListener('click', () => openFullscreenImg(q.sourceImage));
+      thumbWrap.appendChild(lbl);
+      thumbWrap.appendChild(thumb);
+      qDiv.appendChild(thumbWrap);
+    }
   });
 }
 
@@ -1296,6 +1316,158 @@ export function getAllWeakCount() {
 }
 
 // ══════════════════════════════════════════════
+//  SOURCE IMAGE
+// ══════════════════════════════════════════════
+
+export function openFullscreenImg(src) {
+  const overlay = document.getElementById('img-fullscreen');
+  const img = document.getElementById('img-fullscreen-img');
+  if (!overlay || !img) return;
+  img.src = src;
+  overlay.classList.add('open');
+  const handler = (e) => {
+    if (e.key === 'Escape') { closeFullscreenImg(); document.removeEventListener('keydown', handler); }
+  };
+  document.addEventListener('keydown', handler);
+}
+
+export function closeFullscreenImg() {
+  const overlay = document.getElementById('img-fullscreen');
+  if (overlay) overlay.classList.remove('open');
+}
+
+function saveSourceImage(questionId, base64String) {
+  const decks = getDecks();
+  let saved = false;
+  decks.forEach(deck => {
+    (deck.questions || []).forEach(q => {
+      if (q.id === questionId) { q.sourceImage = base64String; saved = true; }
+    });
+  });
+  if (saved) {
+    saveDecks(decks);
+    (QS.questions || []).forEach(q => { if (q.id === questionId) q.sourceImage = base64String; });
+  }
+  return saved;
+}
+
+function removeSourceImage(questionId) {
+  const decks = getDecks();
+  decks.forEach(deck => {
+    (deck.questions || []).forEach(q => { if (q.id === questionId) delete q.sourceImage; });
+  });
+  saveDecks(decks);
+  (QS.questions || []).forEach(q => { if (q.id === questionId) delete q.sourceImage; });
+}
+
+function triggerImageAttach(q, area) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/png,image/jpeg,image/gif,image/webp';
+  input.style.display = 'none';
+  document.body.appendChild(input);
+
+  input.onchange = async () => {
+    const file = input.files[0];
+    document.body.removeChild(input);
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      if (_toast) _toast('Image too large — maximum 3 MB');
+      return;
+    }
+    if (file.size > 1 * 1024 * 1024) {
+      if (_toast) _toast('⚠️ Large image — may slow the app');
+    }
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    if (!saveSourceImage(q.id, base64)) {
+      if (_toast) _toast('Could not save image — question not found');
+      return;
+    }
+    q.sourceImage = base64;
+    area.innerHTML = '';
+    renderFixButton(q, area);
+    showSourceImageThumbnail(q);
+    if (_toast) _toast('✓ Source image attached');
+  };
+
+  input.click();
+}
+
+function showImageAttachOptions(q, area) {
+  area.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.2rem;';
+
+  const viewBtn = document.createElement('button');
+  viewBtn.className = 'btn btn-ghost btn-sm';
+  viewBtn.style.fontSize = '0.72rem';
+  viewBtn.textContent = '👁 View';
+  viewBtn.onclick = () => openFullscreenImg(q.sourceImage);
+
+  const replaceBtn = document.createElement('button');
+  replaceBtn.className = 'btn btn-ghost btn-sm';
+  replaceBtn.style.fontSize = '0.72rem';
+  replaceBtn.textContent = '🔄 Replace';
+  replaceBtn.onclick = () => triggerImageAttach(q, area);
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'btn btn-ghost btn-sm';
+  removeBtn.style.cssText = 'font-size:0.72rem;color:var(--accent);';
+  removeBtn.textContent = '🗑 Remove';
+  removeBtn.onclick = () => {
+    removeSourceImage(q.id);
+    q.sourceImage = undefined;
+    // Remove thumbnail from feedback panel if present
+    document.querySelector('.source-img-wrap')?.remove();
+    area.innerHTML = '';
+    renderFixButton(q, area);
+    if (_toast) _toast('Source image removed');
+  };
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn btn-ghost btn-sm';
+  cancelBtn.style.fontSize = '0.72rem';
+  cancelBtn.textContent = '✕';
+  cancelBtn.onclick = () => { area.innerHTML = ''; renderFixButton(q, area); };
+
+  wrap.appendChild(viewBtn);
+  wrap.appendChild(replaceBtn);
+  wrap.appendChild(removeBtn);
+  wrap.appendChild(cancelBtn);
+  area.appendChild(wrap);
+}
+
+function showSourceImageThumbnail(q) {
+  if (!q.sourceImage) return;
+  const fb = document.getElementById('q-feedback');
+  if (!fb) return;
+  if (fb.querySelector('.source-img-wrap')) return; // no duplicates
+
+  const wrap = document.createElement('div');
+  wrap.className = 'source-img-wrap';
+
+  const label = document.createElement('div');
+  label.className = 'source-img-label';
+  label.textContent = '📎 Source reference';
+
+  const thumb = document.createElement('img');
+  thumb.className = 'source-img-thumb';
+  thumb.alt = 'Source reference';
+  thumb.title = 'Click to expand';
+  thumb.src = q.sourceImage;
+  thumb.addEventListener('click', () => openFullscreenImg(q.sourceImage));
+
+  wrap.appendChild(label);
+  wrap.appendChild(thumb);
+  fb.appendChild(wrap);
+}
+
+// ══════════════════════════════════════════════
 //  FIX ANSWER
 // ══════════════════════════════════════════════
 
@@ -1319,6 +1491,18 @@ export function renderFixButton(q, area) {
   phraseBtn.textContent = '✏️ Fix question phrasing';
   phraseBtn.onclick = () => openPhrasingModal(q, null, null);
   wrap.appendChild(phraseBtn);
+
+  const imgBtn = document.createElement('button');
+  imgBtn.className = 'btn btn-ghost btn-sm';
+  imgBtn.style.cssText = 'font-size:0.72rem;padding:0.3rem 0.7rem;';
+  if (q.sourceImage) {
+    imgBtn.textContent = '🖼️ Source image attached';
+    imgBtn.onclick = () => showImageAttachOptions(q, area);
+  } else {
+    imgBtn.textContent = '📎 Attach source image';
+    imgBtn.onclick = () => triggerImageAttach(q, area);
+  }
+  wrap.appendChild(imgBtn);
 
   area.appendChild(wrap);
 }
