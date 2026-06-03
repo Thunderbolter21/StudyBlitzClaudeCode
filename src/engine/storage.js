@@ -116,3 +116,15 @@ export function scheduleSyncAfterSave(syncFn) {
   clearTimeout(_genericSyncTimer);
   _genericSyncTimer = setTimeout(syncFn, 2000);
 }
+
+// ── Clear all StudyBlitz user data from localStorage ──
+// Targets only sb_ (underscore) keys — never sb- (hyphen) Supabase auth keys.
+export function clearUserData() {
+  const keysToRemove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('sb_')) keysToRemove.push(key);
+  }
+  keysToRemove.forEach(key => localStorage.removeItem(key));
+  console.log(`[StudyBlitz] Cleared ${keysToRemove.length} user data keys:`, keysToRemove);
+}

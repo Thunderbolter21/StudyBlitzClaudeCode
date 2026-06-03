@@ -1,6 +1,6 @@
 // auth.js — email+password auth, Supabase blob sync, session restore
 
-import { db, lsLoad, lsSave, getSupaUser, setSupaUser } from './storage.js';
+import { db, lsLoad, lsSave, getSupaUser, setSupaUser, clearUserData } from './storage.js';
 import { KEYS } from '../config.js';
 import { invalidateMemCache } from './memory.js';
 import { invalidateDecksCache } from './decks.js';
@@ -44,12 +44,46 @@ export async function signIn(email, password) {
 
 // ── Sign Out ────────────────────────────────────────────────────────────────
 export async function signOut() {
+  // Step 1: Push to cloud before clearing (only if currently logged in)
+  if (db && getSupaUser()) {
+    try {
+      _toast?.('Saving your data…');
+      const synced = await Promise.race([
+        pushToCloud(),
+        new Promise(resolve => setTimeout(() => resolve(false), 8000))
+      ]);
+      if (!synced) {
+        const proceed = window.confirm(
+          'Could not sync your data to the cloud before logging out. ' +
+          'If you continue, any unsynced changes may be lost. Log out anyway?'
+        );
+        if (!proceed) {
+          _toast?.('Logout cancelled');
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Pre-logout sync error:', err);
+    }
+  }
+
+  // Step 2: Stop background sync before any state changes
+  _stopSync();
+
+  // Step 3: Sign out from Supabase (clears sb- auth session keys)
   if (db) await db.auth.signOut().catch(() => {});
   setSupaUser(null);
-  _stopSync();
+
+  // Step 4: Clear all StudyBlitz data from localStorage (sb_ keys only)
+  clearUserData();
+  invalidateDecksCache();
+  invalidateMemCache();
+
+  // Step 5: Update UI and navigate to onboarding
   updateAuthUI();
+  window.nav?.('dashboard');
   _refreshAll?.();
-  _toast?.('Signed out. Your data is still saved locally.');
+  _toast?.('Signed out successfully');
 }
 
 // ── Post-auth handler ───────────────────────────────────────────────────────
@@ -200,7 +234,7 @@ function _applyMerge(cloud) {
 
 // ── Push to cloud ───────────────────────────────────────────────────────────
 export async function pushToCloud() {
-  if (!db || !getSupaUser()) return;
+  if (!db || !getSupaUser()) return true;
   _updateSyncStatus('syncing');
   const uid = getSupaUser().id;
   const now = new Date().toISOString();
@@ -224,9 +258,11 @@ export async function pushToCloud() {
       ),
     ]);
     _updateSyncStatus('synced');
+    return true;
   } catch (e) {
     console.warn('pushToCloud error:', e);
     _updateSyncStatus('error');
+    return false;
   }
 }
 
