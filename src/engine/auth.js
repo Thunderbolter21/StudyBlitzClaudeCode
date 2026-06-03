@@ -49,7 +49,7 @@ export async function signOut() {
     try {
       _toast?.('Saving your data…');
       const synced = await Promise.race([
-        pushToCloud(),
+        Promise.all([pushToCloud(), pushApiKey()]).then(([dataSync]) => dataSync),
         new Promise(resolve => setTimeout(() => resolve(false), 8000))
       ]);
       if (!synced) {
@@ -97,6 +97,7 @@ async function handlePostAuth(session, type) {
   } else {
     await pullFromCloud();
   }
+  await pullApiKey();
 
   startBackgroundSync();
   _refreshAll?.();
@@ -232,6 +233,43 @@ function _applyMerge(cloud) {
   }
 }
 
+// ── Push API key to Supabase ────────────────────────────────────────────────
+export async function pushApiKey() {
+  if (!db || !getSupaUser()) return;
+  const key = localStorage.getItem(KEYS.apiKey);
+  if (!key) return;
+  try {
+    const { error } = await db
+      .from('user_api_keys')
+      .upsert(
+        { user_id: getSupaUser().id, anthropic_key: key, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      );
+    if (error) console.warn('pushApiKey error:', error.message);
+  } catch (err) {
+    console.warn('pushApiKey error:', err.message);
+  }
+}
+
+// ── Pull API key from Supabase ──────────────────────────────────────────────
+export async function pullApiKey() {
+  if (!db || !getSupaUser()) return;
+  try {
+    const { data, error } = await db
+      .from('user_api_keys')
+      .select('anthropic_key')
+      .eq('user_id', getSupaUser().id)
+      .maybeSingle();
+    if (error) { console.warn('pullApiKey error:', error.message); return; }
+    if (data?.anthropic_key) {
+      localStorage.setItem(KEYS.apiKey, data.anthropic_key);
+      console.log('API key restored:', data.anthropic_key.substring(0, 8) + '…');
+    }
+  } catch (err) {
+    console.warn('pullApiKey error:', err.message);
+  }
+}
+
 // ── Push to cloud ───────────────────────────────────────────────────────────
 export async function pushToCloud() {
   if (!db || !getSupaUser()) return true;
@@ -308,6 +346,7 @@ export async function restoreSession() {
     setSupaUser(session.user);
     const cloud = await _fetchCloud();
     _applyMerge(cloud);   // silent — no modal, no immediate push
+    await pullApiKey();
     startBackgroundSync();
     updateAuthUI();
   } catch (e) {

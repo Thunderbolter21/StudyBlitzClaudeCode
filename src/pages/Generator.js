@@ -3,7 +3,8 @@
 import { KEYS, DECK_COLORS } from '../config.js';
 import { getDecks, saveDecks, getDeckColor } from '../engine/decks.js';
 import { getClasses, saveClasses } from '../engine/classes.js';
-import { supaSaveDeck } from '../engine/storage.js';
+import { db, supaSaveDeck, getSupaUser } from '../engine/storage.js';
+import { pushApiKey } from '../engine/auth.js';
 
 let _toast, _nav, _refreshAll;
 export function initGeneratorCallbacks({ toast, nav, refreshAll }) {
@@ -578,7 +579,7 @@ export function openApiModal() {
         <button class="btn btn-ghost btn-sm" onclick="toggleKeyVis()" id="key-vis-btn" style="flex-shrink:0;">Show</button>
       </div>
       <div class="modal-note" style="margin-bottom:1.2rem;">
-        🔒 Your key is stored only in <strong>this browser's localStorage</strong> — it never leaves your device except to call Anthropic's API directly.<br>
+        🔒 Your key is stored in your browser and synced to your account — only you can access it via Row Level Security.<br>
         New users get free credits. Pricing: ~$0.003 per quiz deck generated. <a href="https://www.anthropic.com/pricing" target="_blank">See pricing →</a>
       </div>
       <div style="display:flex;gap:0.8rem;flex-wrap:wrap;">
@@ -591,6 +592,13 @@ export function openApiModal() {
 
 export function removeApiKey() {
   try { localStorage.removeItem(KEYS.apiKey); } catch (e) {}
+  // Also remove from Supabase if logged in
+  const user = getSupaUser();
+  if (db && user) {
+    db.from('user_api_keys').delete().eq('user_id', user.id).then(({ error }) => {
+      if (error) console.warn('Failed to remove API key from cloud:', error.message);
+    });
+  }
   closeApiModal();
   updateKeyBadge();
   if (_toast) _toast('🗑️ API key removed');
@@ -623,6 +631,7 @@ export function saveApiKey() {
     return;
   }
   storeApiKey(key);
+  pushApiKey(); // fire and forget — sync to Supabase in background
   closeApiModal();
   updateKeyBadge();
   if (_toast) _toast('✅ API key saved');
