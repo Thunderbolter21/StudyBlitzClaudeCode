@@ -6,6 +6,7 @@ import { getMem, getRec, isMastered, isWeak } from '../engine/memory.js';
 import { getBestHS, openPhrasingModal } from '../engine/quiz.js';
 import { DECK_COLORS } from '../config.js';
 import { supaSaveDeck } from '../engine/storage.js';
+import { openRegenerateModal } from '../pages/Generator.js';
 
 let _toast, _refreshAll, _deleteDeck;
 export function initModalCallbacks({ toast, refreshAll, deleteDeck }) {
@@ -57,6 +58,7 @@ export function toggleDeckMenu(e, deckId) {
   menu.innerHTML = `
     <button class="dd-item" data-action="rename"><span class="dd-icon">✏️</span>Rename</button>
     <button class="dd-item" data-action="edit-questions"><span class="dd-icon">✏️</span>Edit Questions</button>
+    <button class="dd-item" data-action="regenerate"><span class="dd-icon">🔄</span>Regenerate Deck</button>
     <button class="dd-item" data-action="assign"><span class="dd-icon">🎓</span>Assign to Class</button>
     <button class="dd-item" data-action="info"><span class="dd-icon">ℹ️</span>Info</button>
     <div class="dd-divider"></div>
@@ -73,7 +75,7 @@ export function toggleDeckMenu(e, deckId) {
 
   // Position at cursor, keeping within viewport
   const vw = window.innerWidth, vh = window.innerHeight;
-  const mw = 210, mh = 200;
+  const mw = 210, mh = 240;
   let x = e.clientX, y = e.clientY;
   if (x + mw > vw) x = vw - mw - 10;
   if (y + mh > vh) y = vh - mh - 10;
@@ -84,6 +86,7 @@ export function toggleDeckMenu(e, deckId) {
 
   menu.querySelector('[data-action="rename"]').onclick = (ev) => { ev.stopPropagation(); renameDeck(deckId); };
   menu.querySelector('[data-action="edit-questions"]').onclick = (ev) => { ev.stopPropagation(); openQuestionPicker(deckId); };
+  menu.querySelector('[data-action="regenerate"]').onclick = (ev) => { ev.stopPropagation(); menu.remove(); openRegenerateModal(deckId); };
   menu.querySelector('[data-action="assign"]').onclick = (ev) => { ev.stopPropagation(); openAssignClassModal(deckId); };
   menu.querySelector('[data-action="info"]').onclick = (ev) => { ev.stopPropagation(); toggleDeckInfo(deckId); };
   menu.querySelector('[data-action="delete"]').onclick = (ev) => { ev.stopPropagation(); _deleteDeck?.(deckId); };

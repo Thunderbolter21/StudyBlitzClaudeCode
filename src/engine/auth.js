@@ -270,6 +270,18 @@ export async function pullApiKey() {
   }
 }
 
+// Strip large `compressed` bytes from sourceFiles before cloud upsert —
+// the bytes live in Supabase Storage (deck-sources bucket), not in the
+// user_decks JSON blob, so this row stays small no matter how many
+// PDFs the user has attached.
+function _stripSourceBytes(deck) {
+  if (!deck.sourceFiles?.length) return deck;
+  return {
+    ...deck,
+    sourceFiles: deck.sourceFiles.map(({ compressed, ...rest }) => rest)
+  };
+}
+
 // ── Push to cloud ───────────────────────────────────────────────────────────
 export async function pushToCloud() {
   if (!db || !getSupaUser()) return true;
@@ -279,7 +291,7 @@ export async function pushToCloud() {
   try {
     await Promise.all([
       db.from('user_decks').upsert(
-        { user_id: uid, data: (lsLoad(KEYS.decks) || []).filter(d => d.id !== 'builtin-mkt300'), updated_at: now },
+        { user_id: uid, data: (lsLoad(KEYS.decks) || []).filter(d => d.id !== 'builtin-mkt300').map(_stripSourceBytes), updated_at: now },
         { onConflict: 'user_id' }
       ),
       db.from('user_memory').upsert(

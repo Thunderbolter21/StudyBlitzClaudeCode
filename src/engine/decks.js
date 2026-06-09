@@ -1,7 +1,7 @@
 // decks.js — deck CRUD operations and built-in deck bootstrapping
 
 import { KEYS, DECK_COLORS } from '../config.js';
-import { load, save, supaDeleteDeck } from './storage.js';
+import { load, save, supaDeleteDeck, deleteDeckSourcesForDeck } from './storage.js';
 import { getClasses } from './classes.js';
 
 // ── Injected callbacks (set via initDeckCallbacks to avoid circular imports) ──
@@ -57,6 +57,8 @@ export async function deleteDeck(id) {
   const updated = decks.filter(d => d.id !== id);
   saveDecks(updated);
   await supaDeleteDeck(id);
+  // Best-effort cleanup of Storage objects — runs in background, won't block UX.
+  deleteDeckSourcesForDeck(id);
   if (_toast) _toast('Deck deleted');
   if (_refreshAll) _refreshAll();
 }

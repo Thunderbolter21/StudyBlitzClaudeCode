@@ -3,8 +3,9 @@
 import { KEYS, DECK_COLORS } from '../config.js';
 import { getDecks, saveDecks, getDeckColor } from '../engine/decks.js';
 import { getClasses, saveClasses } from '../engine/classes.js';
-import { db, supaSaveDeck, getSupaUser } from '../engine/storage.js';
+import { db, supaSaveDeck, getSupaUser, uploadDeckSource, downloadDeckSource } from '../engine/storage.js';
 import { pushApiKey } from '../engine/auth.js';
+import { compressToBase64, decompressFromBase64, formatBytes } from '../engine/compress.js';
 
 let _toast, _nav, _refreshAll;
 export function initGeneratorCallbacks({ toast, nav, refreshAll }) {
@@ -311,7 +312,7 @@ function shuffleAnswerPositions(question) {
    JSON IMPORT
    ══════════════════════════════════════════════════════════ */
 
-export function importFromJson() {
+export async function importFromJson() {
   const box = document.getElementById('json-import-box');
   const statusEl = document.getElementById('import-status');
   if (!box) return;
@@ -388,12 +389,64 @@ export function importFromJson() {
   }
 
   generatedQuestions = valid.map(shuffleAnswerPositions);
+
+  // Build sourceFiles from whatever the user attached (claude.ai workflow).
+  // Files may have been uploaded directly to claude.ai, but if they're still
+  // sitting in attachedFiles we capture them so regeneration via API works later.
+  const sourceFilesForStorage = await _buildSourceFilesFromAttached(attachedFiles);
+
   generatedDeckMeta = {
-    name: document.getElementById('gen-name')?.value?.trim() || 'Imported Deck',
+    name:         document.getElementById('gen-name')?.value?.trim() || 'Imported Deck',
+    sourceFiles:  sourceFilesForStorage,
+    instructions: getInstructionsText(),
+    notes:        getNotesText()
   };
 
   showImportStatus(`\u2713 ${valid.length} questions imported successfully!`, 'var(--green)');
   renderPreview();
+}
+
+// Helper: turn an API-ready payload + original File into a storable sourceFile entry.
+// gzip-compresses the data via compressToBase64 for localStorage efficiency.
+async function _toSourceFileEntry(file, kind, apiReadyBase64, mediaType) {
+  const compressed = await compressToBase64(apiReadyBase64);
+  return {
+    name:           file.name,
+    type:           kind, // 'pdf' | 'image'
+    mediaType,
+    compressed,
+    url:            null,
+    size:           file.size,
+    originalSize:   apiReadyBase64.length,
+    compressedSize: compressed.length
+  };
+}
+
+// Helper used by importFromJson: process whatever's in attachedFiles
+// (which is identical to the start of generateDeck's file loop).
+async function _buildSourceFilesFromAttached(files) {
+  if (!files?.length) return [];
+  const imageFiles  = files.filter(f => f.type.startsWith('image/'));
+  const largeImages = imageFiles.filter(f => f.size > 5 * 1024 * 1024);
+  if (largeImages.length > 0) openCompressionModal();
+
+  const result = [];
+  let imgIdx = 0;
+  for (const f of files) {
+    if (f.type.startsWith('image/')) {
+      imgIdx++;
+      const onProg = largeImages.length > 0
+        ? p => updateCompressionModal(f.name, f.size, p, imgIdx, imageFiles.length)
+        : null;
+      const apiReady = await compressImage(f.data, f.type, onProg);
+      result.push(await _toSourceFileEntry(f, 'image', apiReady.data, apiReady.media_type));
+    } else if (f.type === 'application/pdf') {
+      const base64 = f.data.split(',')[1];
+      result.push(await _toSourceFileEntry(f, 'pdf', base64, 'application/pdf'));
+    }
+  }
+  if (largeImages.length > 0) closeCompressionModal();
+  return result;
 }
 
 function showImportStatus(msg, color) {
@@ -838,6 +891,10 @@ export async function generateDeck() {
   const largeImages = imageFiles.filter(f => f.size > 5 * 1024 * 1024);
   if (largeImages.length > 0) openCompressionModal();
 
+  // Capture API-ready file payloads here so we can compress + store them
+  // AFTER the API call succeeds (no double compressImage work).
+  const _apiReadyFiles = [];
+
   let imgIdx = 0;
   for (const f of attachedFiles) {
     if (f.type.startsWith('image/')) {
@@ -851,6 +908,7 @@ export async function generateDeck() {
         type: 'image',
         source: { type: 'base64', media_type: compressed.media_type, data: compressed.data }
       });
+      _apiReadyFiles.push({ f, kind: 'image', data: compressed.data, mediaType: compressed.media_type });
     } else if (f.type === 'application/pdf') {
       const pdfBytes = Math.ceil((f.data.split(',')[1] || '').length * 3 / 4);
       if (pdfBytes > 30 * 1024 * 1024) {
@@ -861,6 +919,7 @@ export async function generateDeck() {
         type: 'document',
         source: { type: 'base64', media_type: 'application/pdf', data: base64 }
       });
+      _apiReadyFiles.push({ f, kind: 'pdf', data: base64, mediaType: 'application/pdf' });
     }
   }
   if (largeImages.length > 0) closeCompressionModal();
@@ -965,7 +1024,30 @@ CRITICAL RULES:
     if (valid.length === 0) throw new Error('No valid questions parsed from response');
 
     generatedQuestions = valid.map(shuffleAnswerPositions);
-    generatedDeckMeta = { name: deckName };
+
+    // Build sourceFiles for storage from the API-ready payloads we already have.
+    // This is gzip on top of bytes Claude already received \u2014 storage-only,
+    // never sent back to the API in compressed form.
+    const sourceFilesForStorage = [];
+    for (const r of _apiReadyFiles) {
+      sourceFilesForStorage.push(await _toSourceFileEntry(r.f, r.kind, r.data, r.mediaType));
+    }
+    if (sourceFilesForStorage.length > 0) {
+      const totOrig = sourceFilesForStorage.reduce((s, f) => s + (f.originalSize || 0), 0);
+      const totComp = sourceFilesForStorage.reduce((s, f) => s + (f.compressedSize || 0), 0);
+      console.log(
+        `[Source files] Stored ${sourceFilesForStorage.length} files: ` +
+        `${formatBytes(totOrig)} \u2192 ${formatBytes(totComp)} ` +
+        `(${(totComp / totOrig * 100).toFixed(0)}% of original)`
+      );
+    }
+
+    generatedDeckMeta = {
+      name:         deckName,
+      sourceFiles:  sourceFilesForStorage,
+      instructions: getInstructionsText(),
+      notes:        notesText
+    };
 
     if (statusText) statusText.textContent = `\u2713 Generated ${valid.length} questions!`;
     setTimeout(() => { if (statusEl) statusEl.style.display = 'none'; }, 3000);
@@ -1038,11 +1120,16 @@ export function saveDeck() {
     color:     DECK_COLORS[decks.length % DECK_COLORS.length],
     created:   new Date().toISOString(),
     lastScore: null,
-    questions: generatedQuestions
+    questions: generatedQuestions,
+    // Regeneration metadata — populated by generateDeck / importFromJson.
+    sourceFiles:            generatedDeckMeta.sourceFiles  || [],
+    generationInstructions: generatedDeckMeta.instructions || '',
+    generationNotes:        generatedDeckMeta.notes        || '',
+    generationCount:        1
   };
 
   // Show class assignment modal BEFORE writing to storage
-  openPreSaveClassModal(newDeck, (finalDeck) => {
+  openPreSaveClassModal(newDeck, async (finalDeck) => {
     const latest = getDecks();
     latest.push(finalDeck);
     saveDecks(latest);
@@ -1053,11 +1140,55 @@ export function saveDeck() {
     if (userDecks.length === 1) {
       if (_toast) _toast('🎉 First deck saved! Welcome to StudyBlitz.');
       setTimeout(() => _nav?.('dashboard'), 1100);
-      return;
+    } else {
+      if (_toast) _toast(`✓ "${finalDeck.name}" saved to library!`);
     }
-    if (_toast) _toast(`✓ "${finalDeck.name}" saved to library!`);
     if (_refreshAll) _refreshAll();
+
+    // Background: upload sourceFiles to Supabase Storage so the deck can
+    // be regenerated from any signed-in device. Best-effort — if upload
+    // fails the deck still works locally, just not cross-device.
+    if (finalDeck.sourceFiles?.length > 0 && getSupaUser()) {
+      _syncSourceFilesToCloud(finalDeck);
+    }
   });
+}
+
+// Upload a deck's sourceFiles to Supabase Storage, write each returned
+// storagePath back onto the deck, then re-save the deck so the paths
+// persist (and propagate to user_decks via the next pushToCloud).
+async function _syncSourceFilesToCloud(deck) {
+  const user = getSupaUser();
+  if (!user || !deck.sourceFiles?.length) return;
+
+  const n = deck.sourceFiles.length;
+  if (_toast) _toast(`☁️ Syncing ${n} source file${n !== 1 ? 's' : ''}…`);
+
+  await Promise.all(deck.sourceFiles.map(async (sf) => {
+    if (sf.storagePath || !sf.compressed) return; // already uploaded or nothing to upload
+    const uuid = (crypto.randomUUID?.() || Date.now() + '-' + Math.random().toString(36).slice(2));
+    const path = `${user.id}/${deck.id}/${uuid}`;
+    const result = await uploadDeckSource(path, sf.compressed, sf.mediaType);
+    if (result) sf.storagePath = result;
+  }));
+
+  // Re-save the (now path-annotated) deck. saveDecks triggers _onSync,
+  // which debounces a pushToCloud — that's how the storagePaths roam.
+  const decks = getDecks();
+  const idx = decks.findIndex(d => d.id === deck.id);
+  if (idx !== -1) {
+    decks[idx] = deck;
+    saveDecks(decks);
+  }
+
+  const uploaded = deck.sourceFiles.filter(sf => sf.storagePath).length;
+  if (uploaded === n) {
+    if (_toast) _toast(`✓ ${uploaded} file${uploaded !== 1 ? 's' : ''} synced to cloud`);
+  } else if (uploaded > 0) {
+    if (_toast) _toast(`⚠️ Synced ${uploaded} of ${n} files — local regen still works`);
+  } else {
+    if (_toast) _toast('⚠️ Could not sync source files — local regen still works');
+  }
 }
 
 function _resetGeneratorUI() {
@@ -1264,4 +1395,366 @@ function getNotesText() {
 
 function getInstructionsText() {
   return document.getElementById('gen-instructions')?.value?.trim() || '';
+}
+
+/* ══════════════════════════════════════════════════════════════
+   DECK REGENERATION MODAL
+   Pre-fills from the deck's stored sourceFiles / instructions,
+   lets the user adjust, then either Replaces the deck's questions
+   or Saves a new deck. Actual API call lives in triggerRegeneration().
+   ══════════════════════════════════════════════════════ */
+
+export function openRegenerateModal(deckId) {
+  const deck = getDeckById(deckId);
+  if (!deck) return;
+
+  // Close any open ellipsis dropdown / context menu first
+  document.querySelectorAll('.deck-dropdown.open').forEach(m => m.classList.remove('open'));
+  document.getElementById('deck-ctx-menu')?.remove();
+
+  // If a stale instance is hanging around, kill it
+  document.getElementById('regen-modal')?.remove();
+
+  // Build the file-list section
+  const hasSourceFiles = deck.sourceFiles?.length > 0;
+  const fileIcon = t => t === 'pdf' ? '📄' : t === 'image' ? '🖼️' : '📎';
+
+  const sourceFilesList = hasSourceFiles
+    ? deck.sourceFiles.map(f => {
+        const sizeStr = f.size ? formatBytes(f.size) : '';
+        return `
+          <div style="display:flex;align-items:center;gap:0.55rem;font-size:0.78rem;color:var(--muted);padding:0.28rem 0;">
+            <span style="flex-shrink:0;">${fileIcon(f.type)}</span>
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</span>
+            ${sizeStr ? `<span style="font-size:0.7rem;flex-shrink:0;">${sizeStr}</span>` : ''}
+          </div>`;
+      }).join('')
+    : `<div style="font-size:0.78rem;color:var(--muted);font-style:italic;padding:0.2rem 0;">
+        No source files stored — regeneration will use existing question topics as context.
+      </div>`;
+
+  // Unique categories from the existing questions
+  const cats = [...new Set(deck.questions.map(q => q.cat).filter(Boolean))];
+
+  // Build overlay manually (same pattern as openPreSaveClassModal — no makeModal import)
+  const ov = document.createElement('div');
+  ov.id = 'regen-modal';
+  ov.className = 'modal-overlay';
+  ov.style.display = 'flex';
+  ov.onclick = (e) => { if (e.target === ov) closeRegenModal(); };
+  document.body.appendChild(ov);
+
+  ov.innerHTML = `
+    <div class="modal-box" style="max-width:520px;">
+
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem;gap:0.6rem;">
+        <div style="flex:1;min-width:0;">
+          <h2 style="margin:0;">🔄 Regenerate Deck</h2>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:0.2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${deck.name}</div>
+        </div>
+        <button class="btn btn-ghost" id="regen-close" style="padding:0.3rem 0.6rem;font-size:1rem;flex-shrink:0;">✕</button>
+      </div>
+
+      <label class="lbl-s">📎 Source Material</label>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.8rem;margin-bottom:1rem;max-height:140px;overflow-y:auto;">
+        ${sourceFilesList}
+      </div>
+
+      ${cats.length > 0 ? `
+        <label class="lbl-s">📂 Topics Covered</label>
+        <div style="display:flex;flex-wrap:wrap;gap:0.35rem;margin-bottom:1rem;">
+          ${cats.map(c => `<span style="background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:0.18rem 0.65rem;font-size:0.72rem;color:var(--muted);">${c}</span>`).join('')}
+        </div>
+      ` : ''}
+
+      <label class="lbl-s">⚙️ Instructions <span style="color:var(--muted);font-weight:400;font-size:0.7rem;">(edit to steer the regeneration)</span></label>
+      <textarea id="regen-instructions" rows="3"
+        placeholder="e.g. Focus on application questions, include more multi-select…"
+        style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Sora',sans-serif;font-size:0.85rem;padding:0.6rem 0.8rem;resize:vertical;outline:none;margin-bottom:1rem;box-sizing:border-box;">${deck.generationInstructions || ''}</textarea>
+
+      <label class="lbl-s"># Questions</label>
+      <div style="display:flex;align-items:center;gap:0.7rem;margin-bottom:1.3rem;">
+        <button class="btn btn-ghost btn-sm" id="regen-minus" style="padding:0.3rem 0.8rem;">−</button>
+        <input type="number" id="regen-count" value="${Math.min(20, deck.questions.length || 20)}" min="5" max="50"
+          style="width:72px;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:1rem;padding:0.4rem;box-sizing:border-box;" />
+        <button class="btn btn-ghost btn-sm" id="regen-plus" style="padding:0.3rem 0.8rem;">+</button>
+        <span style="font-size:0.75rem;color:var(--muted);">questions</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
+        <button class="btn btn-ghost" id="regen-replace" style="border-color:var(--accent);color:var(--accent);justify-content:center;">
+          🔄 Replace Deck
+        </button>
+        <button class="btn btn-primary" id="regen-new" style="justify-content:center;">
+          ✨ Save as New
+        </button>
+      </div>
+
+      <div id="regen-status" style="margin-top:0.9rem;text-align:center;font-size:0.82rem;color:var(--muted);min-height:1.2rem;"></div>
+    </div>`;
+
+  // Wire handlers (no inline onclick — easier to remove and re-attach)
+  ov.querySelector('#regen-close').onclick   = () => closeRegenModal();
+  ov.querySelector('#regen-minus').onclick   = () => adjRegenCount(-5);
+  ov.querySelector('#regen-plus').onclick    = () => adjRegenCount(5);
+  ov.querySelector('#regen-replace').onclick = () => triggerRegeneration(deckId, 'replace');
+  ov.querySelector('#regen-new').onclick     = () => triggerRegeneration(deckId, 'new');
+
+  // Esc closes
+  const onEsc = (e) => {
+    if (e.key === 'Escape') {
+      document.removeEventListener('keydown', onEsc);
+      closeRegenModal();
+    }
+  };
+  document.addEventListener('keydown', onEsc);
+}
+
+export function closeRegenModal() {
+  document.getElementById('regen-modal')?.remove();
+}
+
+function adjRegenCount(delta) {
+  const el = document.getElementById('regen-count');
+  if (!el) return;
+  const val = (parseInt(el.value) || 20) + delta;
+  el.value = Math.max(5, Math.min(50, val));
+}
+
+// Regenerate a deck: lazy-fetches any cloud-only source files, decompresses,
+// calls Claude API, parses + validates response, then either replaces the
+// existing deck's questions or saves a new versioned deck.
+async function triggerRegeneration(deckId, mode) {
+  const deck = getDeckById(deckId);
+  if (!deck) return;
+
+  const instructions = (document.getElementById('regen-instructions')?.value || '').trim();
+  const count = Math.max(5, Math.min(50, parseInt(document.getElementById('regen-count')?.value || '20')));
+
+  const statusEl = document.getElementById('regen-status');
+  const setStatus = (msg, color) => {
+    if (!statusEl) return;
+    statusEl.style.color = color || 'var(--muted)';
+    statusEl.textContent = msg;
+  };
+
+  // Disable form during regen
+  const formCtrls = document.querySelectorAll('#regen-modal button, #regen-modal input, #regen-modal textarea');
+  formCtrls.forEach(c => c.disabled = true);
+  const reEnable = () => formCtrls.forEach(c => c.disabled = false);
+
+  try {
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      setStatus('❌ No API key — add one in Quiz Builder first', 'var(--accent)');
+      reEnable();
+      return;
+    }
+
+    // ── Phase 1: assemble contentParts ──────────────────────────────────────
+    const contentParts = [];
+    const hasSourceFiles = deck.sourceFiles?.length > 0;
+
+    if (hasSourceFiles) {
+      // Lazy-fetch any cloud-only files in parallel (cross-device case)
+      const needFetch = deck.sourceFiles.filter(sf => !sf.compressed && sf.storagePath);
+      if (needFetch.length > 0) {
+        setStatus(`☁️ Downloading ${needFetch.length} file${needFetch.length !== 1 ? 's' : ''} from cloud…`);
+        await Promise.all(needFetch.map(async (sf) => {
+          const bytes = await downloadDeckSource(sf.storagePath);
+          if (bytes) sf.compressed = bytes; // mutates deck in-memory; persisted via saveDecks below
+        }));
+      }
+
+      setStatus('🔓 Decompressing source files…');
+      for (const sf of deck.sourceFiles) {
+        if (!sf.compressed) {
+          console.warn(`Skipping ${sf.name} — no data available (storage fetch may have failed)`);
+          continue;
+        }
+        const original = await decompressFromBase64(sf.compressed);
+        if (sf.type === 'pdf') {
+          contentParts.push({
+            type: 'document',
+            source: { type: 'base64', media_type: sf.mediaType || 'application/pdf', data: original }
+          });
+        } else if (sf.type === 'image') {
+          contentParts.push({
+            type: 'image',
+            source: { type: 'base64', media_type: sf.mediaType || 'image/jpeg', data: original }
+          });
+        }
+      }
+    }
+
+    // ── Phase 2: build prompt (with fallback context if no usable files) ────
+    let promptNotes = '';
+    if (contentParts.length === 0) {
+      const topics  = [...new Set(deck.questions.map(q => q.cat).filter(Boolean))];
+      const samples = deck.questions.slice(0, 10).map(q => `- ${q.q}`).join('\n');
+      const notesPart = deck.generationNotes ? `\n\nOriginal notes:\n${deck.generationNotes}` : '';
+      promptNotes =
+        `This deck previously covered: ${topics.join(', ') || '(uncategorised)'}.\n\n` +
+        `Sample existing questions — generate DIFFERENT questions covering similar ground:\n` +
+        `${samples}${notesPart}`;
+    }
+    const prompt = buildPromptText(promptNotes, count, instructions);
+    contentParts.push({ type: 'text', text: prompt });
+
+    // ── Phase 3: call Claude API ────────────────────────────────────────────
+    setStatus('🤖 Calling Claude…');
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 8192,
+        system: `You are an expert exam writer. Generate a mix of these question types based on the study material and any special instructions provided. Aim for roughly 60% mc, 25% multi-select, 15% free-response unless instructions specify otherwise.
+
+TYPE 1 - Multiple Choice (mc):
+{"q":"Question?","type":"mc","cat":"Topic","opts":["Option A","Option B","Option C","Option D"],"ans":2,"explain":"Why correct."}
+ans is a NUMBER (0-3). Distribute correct answers evenly across positions 0-3, never default to position 1.
+
+TYPE 2 - Multiple Correct Answers (multi-select):
+{"q":"Which of the following are examples of X? Select all that apply.","type":"multi-select","cat":"Topic","opts":["Option A","Option B","Option C","Option D"],"ans":[0,2],"explain":"A and C are correct because..."}
+ans is an ARRAY of correct index numbers (2-3 correct answers). opts must always have exactly 4 non-empty strings.
+
+TYPE 3 - Free Response:
+{"q":"The ___ is responsible for X in the cell.","type":"free-response","cat":"Topic","opts":null,"ans":["mitochondria","the mitochondria","mitochondrion"],"explain":"The mitochondria produces ATP."}
+ans is an ARRAY of 2-4 accepted answer variants. opts must be null. Question must use ___ fill-in-the-blank or start with "What term..." / "Name the...". Answer must be 1-4 words.
+
+CRITICAL RULES:
+- opts must NEVER be an empty array [], NEVER contain empty strings "", NEVER be undefined
+- For mc and multi-select: opts must have exactly 4 meaningful non-empty answer choices
+- For free-response: opts must be null (not [] or undefined)
+- ans for mc: single number 0-3
+- ans for multi-select: array of numbers
+- ans for free-response: array of strings
+- Every question must have a non-empty explain field
+- Output only a raw JSON array, no markdown fences`,
+        messages: [{ role: 'user', content: contentParts }]
+      })
+    });
+
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      throw new Error(`API ${resp.status}: ${errBody.slice(0, 180)}`);
+    }
+    const data = await resp.json();
+    const textBlock = data.content?.find(b => b.type === 'text');
+    if (!textBlock) throw new Error('No text in API response');
+
+    // ── Phase 4: parse + validate (same shape as generateDeck/importFromJson) ─
+    let raw = textBlock.text.trim();
+    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const arrStart = raw.indexOf('[');
+    const arrEnd   = raw.lastIndexOf(']');
+    if (arrStart >= 0 && arrEnd > arrStart) raw = raw.substring(arrStart, arrEnd + 1);
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('Invalid response — no questions');
+
+    const valid = [];
+    parsed.forEach((item, i) => {
+      if (!item.q || !String(item.q).trim()) return;
+      const type = (() => {
+        const t = (item.type || '').toLowerCase().replace(/[\s_]/g, '-').trim();
+        if (t === 'free-response' || t === 'freeresponse') return 'free-response';
+        if (t === 'multi-select'  || t === 'multiselect')  return 'multi-select';
+        return 'mc';
+      })();
+      const base = {
+        id: 'gen-' + Date.now() + '-' + i,
+        q: String(item.q),
+        cat: String(item.cat || 'General'),
+        explain: String(item.explain || '')
+      };
+      if (type === 'free-response') {
+        let ans = Array.isArray(item.ans) ? item.ans : (typeof item.ans === 'string' ? [item.ans] : []);
+        ans = ans.map(a => String(a).toLowerCase().trim()).filter(a => a.length > 0);
+        if (!ans.length) return;
+        valid.push({ ...base, type: 'free-response', ans });
+      } else if (type === 'multi-select') {
+        if (!Array.isArray(item.opts)) return;
+        let opts = item.opts.map(o => String(o || '')).filter(o => o.trim().length > 0);
+        if (opts.length < 2) return;
+        while (opts.length < 4) opts.push('—');
+        if (opts.length > 4) opts = opts.slice(0, 4);
+        if (!Array.isArray(item.ans) || item.ans.length === 0) return;
+        const ans = item.ans.map(a => parseInt(a)).filter(a => !isNaN(a) && a >= 0 && a < opts.length);
+        if (!ans.length) return;
+        valid.push({ ...base, type: 'multi-select', opts, ans });
+      } else {
+        if (!Array.isArray(item.opts)) return;
+        let opts = item.opts.map(o => String(o || '')).filter(o => o.trim().length > 0);
+        if (opts.length < 2) return;
+        while (opts.length < 4) opts.push('—');
+        if (opts.length > 4) opts = opts.slice(0, 4);
+        let ans = parseInt(item.ans);
+        if (isNaN(ans) || ans < 0 || ans > 3) ans = 0;
+        valid.push({ ...base, opts, ans });
+      }
+    });
+
+    if (valid.length === 0) throw new Error('No valid questions parsed from response');
+
+    const newQuestions = valid.map(shuffleAnswerPositions);
+    setStatus(`✓ Generated ${newQuestions.length} questions — saving…`, 'var(--green)');
+
+    // ── Phase 5: apply to deck (replace or new) ─────────────────────────────
+    const decks = getDecks();
+
+    if (mode === 'replace') {
+      const idx = decks.findIndex(d => d.id === deckId);
+      if (idx === -1) throw new Error('Deck not found');
+      decks[idx].questions              = newQuestions;
+      decks[idx].generationInstructions = instructions || decks[idx].generationInstructions || '';
+      decks[idx].generationCount        = (decks[idx].generationCount || 1) + 1;
+      decks[idx].lastScore              = null;
+      // sourceFiles may have been mutated above (lazy-fetched bytes) — saveDecks persists the cache
+      saveDecks(decks);
+      supaSaveDeck(decks[idx]);
+      if (_toast) _toast(`✓ "${deck.name}" regenerated — ${newQuestions.length} new questions`);
+
+    } else {
+      // 'new' — duplicate the deck with a fresh id and bump version in the name
+      const version = (deck.generationCount || 1) + 1;
+      const newDeck = {
+        ...deck,
+        id:                     'deck-' + Date.now(),
+        name:                   `${deck.name} (v${version})`,
+        questions:              newQuestions,
+        generationInstructions: instructions,
+        generationCount:        1, // new lineage starts fresh
+        created:                new Date().toISOString(),
+        lastScore:              null,
+        // Copy source files but clear storagePath so each gets re-uploaded
+        // under the new deck's id. The compressed bytes are already in
+        // memory (lazy-fetched or original) so no re-download is needed.
+        sourceFiles: (deck.sourceFiles || []).map(sf => ({ ...sf, storagePath: null }))
+      };
+      decks.push(newDeck);
+      saveDecks(decks);
+      supaSaveDeck(newDeck);
+
+      // Re-upload sourceFiles to Storage under the new deck's id
+      if (newDeck.sourceFiles.length > 0 && getSupaUser()) {
+        _syncSourceFilesToCloud(newDeck);
+      }
+      if (_toast) _toast(`✨ New deck "${newDeck.name}" created — ${newQuestions.length} questions`);
+    }
+
+    closeRegenModal();
+    if (_refreshAll) _refreshAll();
+
+  } catch (err) {
+    console.error('Regeneration failed:', err);
+    setStatus(`❌ ${err.message}`, 'var(--accent)');
+    reEnable();
+  }
 }
