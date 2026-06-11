@@ -18,6 +18,50 @@ export let attachedFiles = [];
 export let generatedQuestions = [];
 export let generatedDeckMeta = {};
 
+// ── API error helpers ─────────────────────────────────────────────────────────
+
+function parseApiError(status, responseText) {
+  let errorType = null;
+  try { errorType = JSON.parse(responseText)?.error?.type; } catch { }
+  const messages = {
+    overloaded_error:        'Claude is busy right now — retrying in a moment…',
+    rate_limit_error:        'Too many requests — please wait a moment and try again',
+    invalid_api_key:         'Your API key is invalid — check it in Quiz Builder settings',
+    invalid_request_error:   'Something went wrong with the request — try again',
+    authentication_error:    'API key not recognized — check your key in settings',
+  };
+  return {
+    message: messages[errorType] || `Generation failed (${status}) — please try again`,
+    type: errorType || 'unknown',
+  };
+}
+
+// Retries up to maxRetries times for overloaded_error; throws a clean message otherwise.
+// onRetryStatus(msg) is called with a human-readable status update on each retry.
+async function fetchWithRetry(url, options, onRetryStatus, maxRetries = 3) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok) return response;
+      const text = await response.text();
+      const { message, type } = parseApiError(response.status, text);
+      if (type === 'overloaded_error' && attempt < maxRetries) {
+        const delay = attempt * 8000;
+        onRetryStatus?.(`Claude is busy — retrying in ${delay / 1000}s (attempt ${attempt}/${maxRetries})…`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw new Error(message);
+    } catch (err) {
+      lastErr = err;
+      if (err.message && !err.message.startsWith('fetch')) throw err; // clean API error — don't retry
+      if (attempt < maxRetries) await new Promise(r => setTimeout(r, 5000));
+    }
+  }
+  throw lastErr;
+}
+
 /* ══════════════════════════════════════════════════════════════
    METHOD / TAB SWITCHING
    ══════════════════════════════════════════════════════════ */
@@ -928,18 +972,20 @@ export async function generateDeck() {
   messages[0].content.push({ type: 'text', text: prompt });
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 8192,
-        system: `You are an expert exam writer. Generate a mix of these question types based on the study material and any special instructions provided. Aim for roughly 60% mc, 25% multi-select, 15% free-response unless instructions specify otherwise.
+    const resp = await fetchWithRetry(
+      'https://api.anthropic.com/v1/messages',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 8192,
+          system: `You are an expert exam writer. Generate a mix of these question types based on the study material and any special instructions provided. Aim for roughly 60% mc, 25% multi-select, 15% free-response unless instructions specify otherwise.
 
 TYPE 1 - Multiple Choice (mc):
 {"q":"Question?","type":"mc","cat":"Topic","opts":["Option A","Option B","Option C","Option D"],"ans":2,"explain":"Why correct."}
@@ -962,14 +1008,11 @@ CRITICAL RULES:
 - ans for free-response: array of strings
 - Every question must have a non-empty explain field
 - Output only a raw JSON array, no markdown fences`,
-        messages: messages
-      })
-    });
-
-    if (!resp.ok) {
-      const errBody = await resp.text();
-      throw new Error(`API error ${resp.status}: ${errBody}`);
-    }
+          messages: messages
+        })
+      },
+      (msg) => { if (statusText) statusText.textContent = msg; }
+    );
 
     const data = await resp.json();
     const textBlock = data.content?.find(b => b.type === 'text');
@@ -1603,18 +1646,20 @@ async function triggerRegeneration(deckId, mode) {
 
     // ── Phase 3: call Claude API ────────────────────────────────────────────
     setStatus('🤖 Calling Claude…');
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 8192,
-        system: `You are an expert exam writer. Generate a mix of these question types based on the study material and any special instructions provided. Aim for roughly 60% mc, 25% multi-select, 15% free-response unless instructions specify otherwise.
+    const resp = await fetchWithRetry(
+      'https://api.anthropic.com/v1/messages',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 8192,
+          system: `You are an expert exam writer. Generate a mix of these question types based on the study material and any special instructions provided. Aim for roughly 60% mc, 25% multi-select, 15% free-response unless instructions specify otherwise.
 
 TYPE 1 - Multiple Choice (mc):
 {"q":"Question?","type":"mc","cat":"Topic","opts":["Option A","Option B","Option C","Option D"],"ans":2,"explain":"Why correct."}
@@ -1637,14 +1682,12 @@ CRITICAL RULES:
 - ans for free-response: array of strings
 - Every question must have a non-empty explain field
 - Output only a raw JSON array, no markdown fences`,
-        messages: [{ role: 'user', content: contentParts }]
-      })
-    });
+          messages: [{ role: 'user', content: contentParts }]
+        })
+      },
+      setStatus
+    );
 
-    if (!resp.ok) {
-      const errBody = await resp.text();
-      throw new Error(`API ${resp.status}: ${errBody.slice(0, 180)}`);
-    }
     const data = await resp.json();
     const textBlock = data.content?.find(b => b.type === 'text');
     if (!textBlock) throw new Error('No text in API response');
