@@ -1,7 +1,7 @@
 // Generator.js — quiz builder page: prompt generation, API calls, JSON import, file uploads
 
 import { KEYS, DECK_COLORS } from '../config.js';
-import { getDecks, saveDecks, getDeckColor } from '../engine/decks.js';
+import { getDecks, saveDecks, getDeckById, getDeckColor } from '../engine/decks.js';
 import { getClasses, saveClasses } from '../engine/classes.js';
 import { db, supaSaveDeck, getSupaUser, uploadDeckSource, downloadDeckSource } from '../engine/storage.js';
 import { pushApiKey } from '../engine/auth.js';

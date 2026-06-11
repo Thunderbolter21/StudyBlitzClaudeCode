@@ -393,6 +393,8 @@ export const updateAuthStatus = updateAuthUI;
 function _updateNavAuth() {
   const hamburger = document.querySelector('.hamburger');
   if (hamburger) hamburger.style.display = isLoggedIn() ? '' : 'none';
+  const topbarSignin = document.getElementById('topbar-signin-btn');
+  if (topbarSignin) topbarSignin.style.display = isLoggedIn() ? 'none' : '';
 
   const statusEl = document.getElementById('auth-status');
   const btnEl    = document.getElementById('link-account-btn');
