@@ -2,6 +2,29 @@
 
 let _refreshDashboard, _refreshClasses, _refreshQuizSelect, _refreshSavedTests, _refreshWeakSpots;
 
+// Hash route names → nav() page keys
+export const ROUTES = {
+  'dashboard':    'dashboard',
+  'classes':      'classes',
+  'quiz':         'quiz-select',
+  'quiz-builder': 'generator',
+  'your-decks':   'saved-tests',
+  'weak-spots':   'weak-spots',
+};
+
+// nav() page key → hash route name
+const PAGE_TO_ROUTE = {
+  'dashboard':   'dashboard',
+  'classes':     'classes',
+  'quiz-select': 'quiz',
+  'generator':   'quiz-builder',
+  'saved-tests': 'your-decks',
+  'weak-spots':  'weak-spots',
+};
+
+// Shared object so main.js can read the flag by reference
+export const _routing = { navInProgress: false };
+
 export function initNavCallbacks({ refreshDashboard, refreshClasses, refreshQuizSelect, refreshSavedTests, refreshWeakSpots }) {
   _refreshDashboard = refreshDashboard;
   _refreshClasses = refreshClasses;
@@ -22,6 +45,12 @@ export function nav(page) {
   if (page === 'quiz-select') _refreshQuizSelect?.();
   if (page === 'saved-tests') _refreshSavedTests?.();
   if (page === 'weak-spots') _refreshWeakSpots?.();
+
+  // Update URL hash — flag prevents the hashchange listener from re-firing
+  const route = PAGE_TO_ROUTE[page] || page;
+  _routing.navInProgress = true;
+  window.location.hash = route;
+  setTimeout(() => { _routing.navInProgress = false; }, 50);
 }
 
 export function openNav() {

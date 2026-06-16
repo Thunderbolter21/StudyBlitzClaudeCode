@@ -5,11 +5,11 @@ import './styles/quiz.css';
 import './styles/exam.css';
 import './styles/classes.css';
 
-import { nav, openNav, closeNav, initNavCallbacks, initNavListeners } from './components/Navigation.js';
+import { nav, openNav, closeNav, initNavCallbacks, initNavListeners, ROUTES, _routing } from './components/Navigation.js';
 import { initDeckCardCallbacks } from './components/DeckCard.js';
 import { toggleDeckMenu, openAssignClassModal, openCreateClassModal, openClassMenu, initModalCallbacks, openGuestSignupModal, closeGuestSignupModal } from './components/Modals.js';
 import { initDeckCallbacks, getDecks, getDeckById, deleteDeck, initBuiltins } from './engine/decks.js';
-import { initAuth, syncOnBoot, scheduleSync, openAuthModal, updateAuthStatus, initAuthCallbacks } from './engine/auth.js';
+import { initAuth, syncOnBoot, scheduleSync, openAuthModal, updateAuthStatus, initAuthCallbacks, isLoggedIn } from './engine/auth.js';
 import { registerSyncCallback } from './engine/storage.js';
 import {
   QS, EX, getHS, hsKey, getBestHS, saveHS,
@@ -164,6 +164,57 @@ function initClickOutside() {
   });
 }
 
+// ── Hash routing ──
+function handleDeckDeepLink(deckId) {
+  if (!deckId) { toast('Invalid deck link'); nav('dashboard'); return; }
+  const deck = getDeckById(deckId);
+  if (!deck) {
+    toast(isLoggedIn() ? 'Deck not found' : 'Sign in to open this deck review');
+    history.replaceState(null, '', window.location.pathname + '#dashboard');
+    nav('dashboard');
+    return;
+  }
+  // Replace deep-link hash so back button returns to dashboard, not the link
+  history.replaceState(null, '', window.location.pathname + '#dashboard');
+  quickStartDeck(deck.id);
+  toast('Opening ' + deck.name + '…');
+}
+
+function handleHashChange() {
+  if (_routing.navInProgress) return;
+  const hash = window.location.hash.slice(1);
+  if (!hash) { nav('dashboard'); return; }
+  const [route, queryStr] = hash.split('?');
+  if (route === 'review') {
+    const deckId = new URLSearchParams(queryStr || '').get('deck');
+    handleDeckDeepLink(deckId);
+    return;
+  }
+  if (ROUTES[route]) { nav(ROUTES[route]); }
+  else { nav('dashboard'); }
+}
+
+function handleInitialHash() {
+  const hash = window.location.hash.slice(1);
+  if (!hash) {
+    // Set canonical hash for dashboard without adding a history entry
+    history.replaceState(null, '', '#dashboard');
+    return;
+  }
+  const [route, queryStr] = hash.split('?');
+  if (route === 'review') {
+    const deckId = new URLSearchParams(queryStr || '').get('deck');
+    handleDeckDeepLink(deckId);
+    return;
+  }
+  if (ROUTES[route]) { nav(ROUTES[route]); }
+  else { nav('dashboard'); }
+}
+
+function initHashRouting() {
+  window.addEventListener('hashchange', handleHashChange);
+}
+
 // ── Boot ──
 async function boot() {
   wireCallbacks();                        // must be first — wires toast/_refreshAll
@@ -172,6 +223,7 @@ async function boot() {
   initKeyboard();
   initFullscreenImage();
   initClickOutside();
+  initHashRouting();
   setupDropZone();
   updateKeyBadge();
   registerSyncCallback(scheduleSync);     // auto-sync on any data save
@@ -183,6 +235,7 @@ async function boot() {
   refreshAll();
   updateAuthStatus();                     // render correct auth state in nav + banner
   initQuizSelectListeners();              // wire game-mode radio auto-open once
+  handleInitialHash();                    // navigate to hash URL or set #dashboard
 }
 
 boot();
