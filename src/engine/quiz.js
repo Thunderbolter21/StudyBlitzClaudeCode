@@ -390,7 +390,7 @@ function _renderFreeResponseInput(q, container) {
   input.autocomplete = 'off';
   input.spellcheck = false;
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); _submitFreeResponse(); }
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); _submitFreeResponse(); }
   });
 
   const submitBtn = document.createElement('button');
