@@ -1,5 +1,6 @@
 // Generator.js — quiz builder page: prompt generation, API calls, JSON import, file uploads
 
+import { jsonrepair } from 'jsonrepair';
 import { KEYS, DECK_COLORS } from '../config.js';
 import { getDecks, saveDecks, getDeckById, getDeckColor } from '../engine/decks.js';
 import { getClasses, saveClasses } from '../engine/classes.js';
@@ -60,6 +61,65 @@ async function fetchWithRetry(url, options, onRetryStatus, maxRetries = 3) {
     }
   }
   throw lastErr;
+}
+
+// Strips markdown fences, extracts the JSON array, tries direct parse,
+// then falls back to jsonrepair on the extracted string, then on the full text.
+function extractAndRepairJSON(rawText) {
+  let cleaned = rawText
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/gi, '')
+    .trim();
+  const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
+  if (!arrayMatch) return null;
+  const jsonStr = arrayMatch[0];
+  try { return JSON.parse(jsonStr); } catch { }
+  try { return JSON.parse(jsonrepair(jsonStr)); } catch { }
+  try {
+    const match = jsonrepair(cleaned).match(/\[[\s\S]*\]/);
+    if (match) return JSON.parse(match[0]);
+  } catch { }
+  return null;
+}
+
+// Wraps fetchWithRetry + extractAndRepairJSON in an outer retry loop so a
+// failed JSON parse retries the entire API call (up to maxAttempts times).
+// onRetryStatus is the same status-update callback used by fetchWithRetry.
+async function generateWithRetry(apiKey, requestBody, onRetryStatus, maxAttempts = 3) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const resp = await fetchWithRetry(
+        'https://api.anthropic.com/v1/messages',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+          },
+          body: JSON.stringify(requestBody)
+        },
+        onRetryStatus
+      );
+      const data = await resp.json();
+      const rawText = data.content.filter(c => c.type === 'text').map(c => c.text).join('');
+      const questions = extractAndRepairJSON(rawText);
+      if (questions && questions.length > 0) {
+        if (attempt > 1) console.log(`Generation succeeded on attempt ${attempt}`);
+        return questions;
+      }
+      lastError = new Error('No valid questions in response');
+    } catch (err) {
+      lastError = err;
+    }
+    if (attempt < maxAttempts) {
+      onRetryStatus?.(`Attempt ${attempt} failed, retrying… (${attempt}/${maxAttempts})`);
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+  throw lastError || new Error('Generation failed after 3 attempts');
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -971,21 +1031,7 @@ export async function generateDeck() {
 
   messages[0].content.push({ type: 'text', text: prompt });
 
-  try {
-    const resp = await fetchWithRetry(
-      'https://api.anthropic.com/v1/messages',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 8192,
-          system: `You are an expert exam writer. Generate a mix of these question types based on the study material and any special instructions provided. Aim for roughly 60% mc, 25% multi-select, 15% free-response unless instructions specify otherwise.
+  const _genSystemPrompt = `You are an expert exam writer. Generate a mix of these question types based on the study material and any special instructions provided. Aim for roughly 60% mc, 25% multi-select, 15% free-response unless instructions specify otherwise.
 
 TYPE 1 - Multiple Choice (mc):
 {"q":"Question?","type":"mc","cat":"Topic","opts":["Option A","Option B","Option C","Option D"],"ans":2,"explain":"Why correct."}
@@ -1007,27 +1053,14 @@ CRITICAL RULES:
 - ans for multi-select: array of numbers
 - ans for free-response: array of strings
 - Every question must have a non-empty explain field
-- Output only a raw JSON array, no markdown fences`,
-          messages: messages
-        })
-      },
+- Output only a raw JSON array, no markdown fences`;
+
+  try {
+    const parsed = await generateWithRetry(
+      apiKey,
+      { model: 'claude-sonnet-4-6', max_tokens: 8192, system: _genSystemPrompt, messages },
       (msg) => { if (statusText) statusText.textContent = msg; }
     );
-
-    const data = await resp.json();
-    const textBlock = data.content?.find(b => b.type === 'text');
-    if (!textBlock) throw new Error('No text in API response');
-
-    // Parse JSON from response
-    let raw = textBlock.text.trim();
-    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-    const arrStart = raw.indexOf('[');
-    const arrEnd = raw.lastIndexOf(']');
-    if (arrStart >= 0 && arrEnd > arrStart) {
-      raw = raw.substring(arrStart, arrEnd + 1);
-    }
-
-    const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('Invalid response format');
 
     // Normalize questions — handles mc, multi-select, and free-response
@@ -1635,31 +1668,17 @@ async function triggerRegeneration(deckId, mode) {
     if (contentParts.length === 0) {
       const topics  = [...new Set(deck.questions.map(q => q.cat).filter(Boolean))];
       const samples = deck.questions.slice(0, 10).map(q => `- ${q.q}`).join('\n');
-      const notesPart = deck.generationNotes ? `\n\nOriginal notes:\n${deck.generationNotes}` : '';
       promptNotes =
         `This deck previously covered: ${topics.join(', ') || '(uncategorised)'}.\n\n` +
         `Sample existing questions — generate DIFFERENT questions covering similar ground:\n` +
-        `${samples}${notesPart}`;
+        `${samples}`;
     }
     const prompt = buildPromptText(promptNotes, count, instructions);
     contentParts.push({ type: 'text', text: prompt });
 
-    // ── Phase 3: call Claude API ────────────────────────────────────────────
+    // ── Phase 3+4: call Claude API + self-healing JSON parse ────────────────
     setStatus('🤖 Calling Claude…');
-    const resp = await fetchWithRetry(
-      'https://api.anthropic.com/v1/messages',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 8192,
-          system: `You are an expert exam writer. Generate a mix of these question types based on the study material and any special instructions provided. Aim for roughly 60% mc, 25% multi-select, 15% free-response unless instructions specify otherwise.
+    const _regenSystemPrompt = `You are an expert exam writer. Generate a mix of these question types based on the study material and any special instructions provided. Aim for roughly 60% mc, 25% multi-select, 15% free-response unless instructions specify otherwise.
 
 TYPE 1 - Multiple Choice (mc):
 {"q":"Question?","type":"mc","cat":"Topic","opts":["Option A","Option B","Option C","Option D"],"ans":2,"explain":"Why correct."}
@@ -1681,25 +1700,12 @@ CRITICAL RULES:
 - ans for multi-select: array of numbers
 - ans for free-response: array of strings
 - Every question must have a non-empty explain field
-- Output only a raw JSON array, no markdown fences`,
-          messages: [{ role: 'user', content: contentParts }]
-        })
-      },
+- Output only a raw JSON array, no markdown fences`;
+    const parsed = await generateWithRetry(
+      apiKey,
+      { model: 'claude-sonnet-4-6', max_tokens: 8192, system: _regenSystemPrompt, messages: [{ role: 'user', content: contentParts }] },
       setStatus
     );
-
-    const data = await resp.json();
-    const textBlock = data.content?.find(b => b.type === 'text');
-    if (!textBlock) throw new Error('No text in API response');
-
-    // ── Phase 4: parse + validate (same shape as generateDeck/importFromJson) ─
-    let raw = textBlock.text.trim();
-    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-    const arrStart = raw.indexOf('[');
-    const arrEnd   = raw.lastIndexOf(']');
-    if (arrStart >= 0 && arrEnd > arrStart) raw = raw.substring(arrStart, arrEnd + 1);
-
-    const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('Invalid response — no questions');
 
     const valid = [];
