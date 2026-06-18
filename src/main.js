@@ -215,8 +215,21 @@ function initHashRouting() {
   window.addEventListener('hashchange', handleHashChange);
 }
 
+// ── Console easter egg (Claude & Matt) ──
+function consoleEasterEgg() {
+  try {
+    console.log(
+      '%cStudyBlitz%c  study smarter, not harder',
+      'font-family:monospace;font-size:22px;font-weight:700;color:#ff3f6c;',
+      'font-family:monospace;font-size:12px;color:#6a6a98;'
+    );
+    console.log('%c✦ crafted by Claude & Matt', 'font-family:monospace;font-size:11px;color:#38b2ff;');
+  } catch (_) {}
+}
+
 // ── Boot ──
 async function boot() {
+  consoleEasterEgg();
   wireCallbacks();                        // must be first — wires toast/_refreshAll
   exposeGlobals();
   initNavListeners();

@@ -33,11 +33,21 @@ export function initNavCallbacks({ refreshDashboard, refreshClasses, refreshQuiz
   _refreshWeakSpots = refreshWeakSpots;
 }
 
-export function nav(page) {
+function _prefersReducedMotion() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+// The actual page swap + routing. Logic is unchanged from the original nav().
+function _applyNav(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const pg = document.getElementById('page-'+page);
-  if (pg) { pg.classList.add('active'); pg.classList.add('fade-up'); setTimeout(()=>pg.classList.remove('fade-up'),400); }
+  const useVT = !!document.startViewTransition && !_prefersReducedMotion();
+  if (pg) {
+    pg.classList.add('active');
+    // View Transitions handle the cross-fade; legacy fade-up is only the fallback.
+    if (!useVT) { pg.classList.add('fade-up'); setTimeout(()=>pg.classList.remove('fade-up'),400); }
+  }
   document.querySelectorAll(`.nav-item[data-page="${page}"]`).forEach(n => n.classList.add('active'));
   closeNav();
   if (page === 'dashboard') _refreshDashboard?.();
@@ -51,6 +61,12 @@ export function nav(page) {
   _routing.navInProgress = true;
   window.location.hash = route;
   setTimeout(() => { _routing.navInProgress = false; }, 50);
+}
+
+// Section changes morph via the View Transitions API; falls back to instant.
+export function nav(page) {
+  if (!document.startViewTransition || _prefersReducedMotion()) { _applyNav(page); return; }
+  document.startViewTransition(() => _applyNav(page));
 }
 
 export function openNav() {

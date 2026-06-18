@@ -26,6 +26,7 @@ const MODE_LABELS = {
 function _restoreDashboardShell(el) {
   el.innerHTML = `
     <div class="page-header">
+      <div class="dash-greeting">welcome back</div>
       <h1>DASHBOARD</h1>
       <p>Your adaptive study command center</p>
     </div>
@@ -57,6 +58,27 @@ function _restoreDashboardShell(el) {
       <div class="dash-tile" style="--tc:var(--purple)" onclick="nav('saved-tests')"><div class="tile-icon">📁</div><div class="tile-label">Saved Tests</div></div>
       <div class="dash-tile" style="--tc:var(--gold)" onclick="nav('weak-spots')"><div class="tile-icon">🎯</div><div class="tile-label">Weak Spots</div></div>
     </div>`;
+}
+
+/* ── _runStaggerEntrance — signature card cascade, once per page load ── */
+let _dashEntranceDone = false;
+function _runStaggerEntrance() {
+  if (_dashEntranceDone) return;
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) { _dashEntranceDone = true; return; }
+  const page = document.getElementById('page-dashboard');
+  if (!page || !page.classList.contains('active')) return; // only animate when visible
+  const els = [
+    ...page.querySelectorAll('.stat-card'),
+    page.querySelector('#dash-recent > .card'),
+    page.querySelector('#dash-review-callout > .card'),
+    ...page.querySelectorAll('.dash-tile'),
+  ].filter(Boolean);
+  els.forEach((el, i) => {
+    el.style.animationDelay = `${i * 60}ms`;
+    el.classList.add('stagger-in');
+  });
+  _dashEntranceDone = true;
 }
 
 /* ── refreshDashboard ────────────────────────────────────── */
@@ -116,7 +138,7 @@ export function refreshDashboard() {
                 <div style="font-weight:700;font-size:1.05rem;">${deck.name}</div>
                 <div style="font-size:0.78rem;color:var(--muted);margin-top:0.2rem;">${modeLabel} · ${deck.questions.length} questions</div>
               </div>
-              <button class="btn btn-primary btn-sm" id="dash-resume-btn">&#9654; Resume</button>
+              <button class="btn btn-primary btn-sheen btn-sm" id="dash-resume-btn">&#9654; Resume</button>
             </div>
           </div>`;
         const resumeBtn = document.getElementById('dash-resume-btn');
@@ -150,6 +172,8 @@ export function refreshDashboard() {
       }
     }
   }
+
+  _runStaggerEntrance();
 }
 
 /* ── getConfidentlyWrong ──────────────────────────────────── */
@@ -333,7 +357,7 @@ function _renderReviewCallout(dueCards, byClass) {
           <div style="font-weight:700;font-size:1.05rem;">${count} card${count !== 1 ? 's' : ''} ready</div>
           ${classPillsHtml}
         </div>
-        <button class="btn btn-primary btn-sm" id="dash-review-btn">&#9654; Review Now</button>
+        <button class="btn btn-primary btn-sheen btn-sm" id="dash-review-btn">&#9654; Review Now</button>
       </div>
     </div>`;
 

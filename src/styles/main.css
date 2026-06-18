@@ -1,5 +1,5 @@
 /* main.css — global tokens, layout, typography, shared components */
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Sora:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@500;600&family=Sora:wght@300;400;500;600;700&display=swap');
 
 :root {
   --bg: #07070e;
@@ -63,11 +63,14 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .recent-card-eyebrow{font-size:0.65rem;text-transform:uppercase;letter-spacing:0.18em;color:var(--muted);}
 .recent-card-name{font-weight:600;font-size:0.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;}
 .recent-card-meta{font-size:0.72rem;color:var(--muted);}
-.dash-tile{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:2rem 1.5rem;cursor:pointer;transition:all 0.2s;text-align:center;position:relative;overflow:hidden;}
-.dash-tile::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--tc);}
-.dash-tile:hover{transform:translateY(-4px);border-color:var(--tc);box-shadow:0 10px 30px rgba(0,0,0,0.4);}
-.dash-tile .tile-icon{font-size:2.2rem;margin-bottom:0.8rem;}
-.dash-tile .tile-label{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:0.06em;color:var(--text);}
+.dash-tile{background:var(--glass-bg);backdrop-filter:blur(var(--glass-blur)) saturate(120%);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(120%);border:1px solid var(--glass-bd);border-radius:var(--radius-lg);padding:2rem 1.5rem;cursor:pointer;transition:transform var(--dur-2) var(--ease-out),border-color var(--dur-2),box-shadow var(--dur-2);text-align:center;position:relative;overflow:hidden;box-shadow:var(--glass-sheen),var(--glass-shadow);}
+.dash-tile::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--tc);z-index:2;}
+.dash-tile::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 75% 60% at 50% 0%,var(--tc),transparent 70%);opacity:0;transition:opacity var(--dur-2) ease;pointer-events:none;}
+.dash-tile:hover{transform:translateY(-4px);border-color:var(--tc);box-shadow:var(--glass-sheen),0 14px 40px rgba(0,0,0,0.5);}
+.dash-tile:hover::after{opacity:0.14;}
+.dash-tile .tile-icon{font-size:2.2rem;margin-bottom:0.8rem;position:relative;z-index:1;transition:transform var(--dur-2) var(--ease-out);}
+.dash-tile:hover .tile-icon{transform:translateY(-3px) scale(1.06);}
+.dash-tile .tile-label{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:0.08em;color:var(--text);position:relative;z-index:1;}
 
 /* ── COMMON UI ── */
 h1{font-family:'Bebas Neue',sans-serif;font-size:2.8rem;letter-spacing:0.05em;line-height:1;margin-bottom:0.3rem;}
@@ -111,11 +114,12 @@ select:disabled{opacity:0.4;cursor:not-allowed;}
 
 /* ── DASHBOARD ── */
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem;}
-.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem;position:relative;overflow:hidden;}
-.stat-card.clickable{cursor:pointer;transition:all 0.18s;}
-.stat-card.clickable:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,0.4);border-color:var(--c);}
-.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--c);}
-.stat-num{font-family:'Bebas Neue',sans-serif;font-size:2.8rem;line-height:1;color:var(--c);}
+.stat-card{background:var(--glass-bg);backdrop-filter:blur(var(--glass-blur)) saturate(120%);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(120%);border:1px solid var(--glass-bd);border-radius:var(--radius-lg);padding:1.3rem 1.2rem;position:relative;overflow:hidden;box-shadow:var(--glass-sheen),var(--glass-shadow);transition:transform var(--dur-2) var(--ease-out),border-color var(--dur-2),box-shadow var(--dur-2);}
+.stat-card:hover{transform:translateY(-2px);border-color:var(--glass-bd-hover);}
+.stat-card.clickable{cursor:pointer;}
+.stat-card.clickable:hover{transform:translateY(-4px);border-color:var(--c);box-shadow:var(--glass-sheen),0 14px 40px rgba(0,0,0,0.5);}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--c);opacity:0.9;}
+.stat-num{font-family:'Bebas Neue',sans-serif;font-size:2.8rem;line-height:1;color:var(--c);letter-spacing:0.01em;font-variant-numeric:tabular-nums;}
 .stat-lbl{font-size:0.7rem;text-transform:uppercase;letter-spacing:0.15em;color:var(--muted);margin-top:0.2rem;}
 .deck-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1.2rem;}
 .deck-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.3rem;cursor:pointer;transition:all 0.2s;position:relative;overflow:visible;}
@@ -405,4 +409,89 @@ select:disabled{opacity:0.4;cursor:not-allowed;}
   .nav-item{padding:0.85rem 1.2rem;}
   .mode-card-sub{display:none;}
   .mode-card-inner{gap:0.5rem;}
+}
+
+/* ════════════ DASHBOARD REDESIGN — Step 1 (glass · connective bg · motion) ════════════ */
+
+/* Design tokens — additive; existing :root tokens untouched. Custom props cascade,
+   so these apply to the .stat-card / .dash-tile rules above regardless of order. */
+:root{
+  --glass-bg:rgba(255,255,255,0.035);
+  --glass-bg-hover:rgba(255,255,255,0.06);
+  --glass-bd:rgba(255,255,255,0.09);
+  --glass-bd-hover:rgba(255,255,255,0.18);
+  --glass-blur:18px;
+  --glass-sheen:inset 0 1px 0 rgba(255,255,255,0.07);
+  --glass-shadow:0 8px 32px rgba(0,0,0,0.40);
+  --radius-lg:18px;
+  --ease-out:cubic-bezier(.22,1,.36,1);
+  --dur-1:.15s;
+  --dur-2:.25s;
+  --dur-3:.5s;
+}
+
+/* Connective tissue — faint dot-grid + ONE slow drifting light-thread (CSS only) */
+#connective-bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;
+  background-image:radial-gradient(circle at center,rgba(255,255,255,0.035) 1px,transparent 1.4px);
+  background-size:26px 26px;
+  -webkit-mask-image:radial-gradient(ellipse 85% 65% at 50% 38%,#000 35%,transparent 100%);
+          mask-image:radial-gradient(ellipse 85% 65% at 50% 38%,#000 35%,transparent 100%);}
+#connective-bg::before{content:'';position:absolute;top:18%;left:-25%;width:150%;height:62%;
+  background:linear-gradient(115deg,transparent 32%,rgba(120,150,255,0.10) 47%,rgba(255,90,140,0.10) 53%,transparent 70%);
+  filter:blur(48px);will-change:transform;
+  animation:threadDrift 40s ease-in-out infinite alternate;}
+@keyframes threadDrift{
+  0%{transform:translate3d(-8%,-6%,0) rotate(-2deg);}
+  100%{transform:translate3d(8%,7%,0) rotate(2deg);}}
+
+/* Resume + Review callout cards → glass (scoped; all other .card instances untouched) */
+#dash-recent>.card,#dash-review-callout>.card{
+  background:var(--glass-bg);
+  backdrop-filter:blur(var(--glass-blur)) saturate(120%);
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(120%);
+  border-color:var(--glass-bd);
+  border-radius:var(--radius-lg);
+  box-shadow:var(--glass-sheen),var(--glass-shadow);
+  transition:transform var(--dur-2) var(--ease-out),border-color var(--dur-2);}
+#dash-recent>.card:hover,#dash-review-callout>.card:hover{transform:translateY(-2px);}
+
+/* Liquid-glass button primitive (shared, reusable app-wide) + sheen-only modifier */
+.btn-glass{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:0.5rem;
+  background:var(--glass-bg-hover);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--glass-bd-hover);border-radius:999px;color:var(--text);
+  font-family:'Sora',sans-serif;font-size:0.85rem;font-weight:600;padding:0.65rem 1.4rem;cursor:pointer;
+  transition:background var(--dur-2),border-color var(--dur-2),transform var(--dur-1);}
+.btn-glass:hover{background:rgba(255,255,255,0.10);border-color:rgba(255,255,255,0.24);}
+.btn-glass:active{transform:scale(0.97);}
+.btn-sheen{position:relative;overflow:hidden;}
+.btn-glass::after,.btn-sheen::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(120deg,transparent 30%,rgba(255,255,255,0.20) 50%,transparent 70%);
+  transform:translateX(-130%);transition:transform 0.6s ease;}
+.btn-glass:hover::after,.btn-sheen:hover::after{transform:translateX(130%);}
+
+/* Signature stagger entrance (GPU-friendly: transform + opacity only) */
+@keyframes staggerIn{from{opacity:0;transform:translateY(16px) scale(0.985);}to{opacity:1;transform:translateY(0) scale(1);}}
+.stagger-in{animation:staggerIn var(--dur-3) var(--ease-out) both;}
+
+/* Section morph via View Transitions API — smooth cross-fade between pages */
+::view-transition-old(root),::view-transition-new(root){
+  animation-duration:0.28s;animation-timing-function:cubic-bezier(.22,1,.36,1);}
+
+/* Dashboard typography — generous Bebas breathing room + handwritten greeting */
+#page-dashboard .page-header h1{font-size:clamp(2.8rem,6vw,3.6rem);letter-spacing:0.14em;line-height:1.02;}
+.dash-greeting{font-family:'Caveat',cursive;font-size:1.55rem;font-weight:600;color:var(--accent);line-height:1;margin-bottom:0.15rem;}
+
+/* Lighter / static connective bg + thinner blur on mobile (GPU budget) */
+@media(max-width:768px){
+  #connective-bg::before{animation:none;opacity:0.55;}
+  .stat-card,.dash-tile{backdrop-filter:blur(10px) saturate(115%);-webkit-backdrop-filter:blur(10px) saturate(115%);}
+}
+
+/* Respect reduced motion across every new motion primitive */
+@media(prefers-reduced-motion:reduce){
+  .stagger-in{animation:none!important;}
+  #connective-bg::before{animation:none!important;}
+  .btn-glass::after,.btn-sheen::after{transition:none!important;}
+  .stat-card,.dash-tile,.dash-tile .tile-icon{transition:none!important;}
+  ::view-transition-old(root),::view-transition-new(root){animation:none!important;}
 }
