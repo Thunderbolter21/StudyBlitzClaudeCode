@@ -495,3 +495,106 @@ select:disabled{opacity:0.4;cursor:not-allowed;}
   .stat-card,.dash-tile,.dash-tile .tile-icon{transition:none!important;}
   ::view-transition-old(root),::view-transition-new(root){animation:none!important;}
 }
+
+/* ════════════ NAV SHELL + FAB — Step 2 (IDE file-tree · floating menu) ════════════ */
+
+/* File-tree trigger glyph — reuses the .hamburger button base (incl. auth show/hide) */
+.nav-trigger-ico{width:19px;height:19px;display:block;}
+
+/* ── File-tree popover panel — overrides the Step-1 slide drawer (scale+fade) ── */
+.nav-panel{
+  position:fixed; top:64px; right:14px; left:auto; height:auto;
+  width:330px; max-width:calc(100vw - 28px); max-height:min(78vh,720px);
+  background:var(--glass-bg);
+  backdrop-filter:blur(26px) saturate(150%); -webkit-backdrop-filter:blur(26px) saturate(150%);
+  border:1px solid var(--glass-bd);
+  border-radius:var(--radius-lg);
+  box-shadow:var(--glass-sheen), 0 24px 70px rgba(0,0,0,0.62);
+  z-index:201; padding:0; display:flex; flex-direction:column; overflow:hidden;
+  font-family:ui-monospace,'SFMono-Regular','SF Mono','Cascadia Code','Consolas',monospace;
+  transform-origin:top right; transform:scale(0.94); opacity:0; pointer-events:none;
+  transition:transform .18s var(--ease-out), opacity .18s var(--ease-out);
+}
+.nav-panel.open{transform:scale(1); opacity:1; pointer-events:auto;}
+
+.nav-tree-head{display:flex;align-items:center;justify-content:space-between;
+  padding:0.7rem 0.55rem 0.7rem 0.9rem; border-bottom:1px solid var(--glass-bd);}
+.nav-tree-title{font-size:0.68rem;letter-spacing:0.24em;color:var(--muted);text-transform:uppercase;}
+
+.nav-tree{padding:0.45rem; overflow-y:auto; flex:1; min-height:0;}
+
+.nav-tree-foot{border-top:1px solid var(--glass-bd);padding:0.6rem 0.9rem 0.8rem;font-family:'Sora',sans-serif;}
+.nav-tree-foot .nav-gs-link{margin-top:0.2rem;}
+
+/* Tree rows */
+.nt-row{display:flex;align-items:center;gap:0.45rem;width:100%;text-align:left;
+  background:transparent;border:none;color:var(--text);font-family:inherit;
+  font-size:0.82rem;padding:0.4rem 0.5rem;border-radius:8px;cursor:pointer;
+  transition:background var(--dur-1);line-height:1.25;}
+.nt-row:hover{background:rgba(255,255,255,0.06);}
+.nt-row.active{background:rgba(255,63,108,0.13);color:#fff;}
+.nt-chevron{display:inline-flex;width:13px;justify-content:center;flex-shrink:0;
+  color:var(--muted);font-size:0.62rem;transition:transform .2s var(--ease-out);}
+.nt-chevron-spacer{width:13px;flex-shrink:0;}
+.nt-branch.open>.nt-chevron{transform:rotate(90deg);animation:chevronSettle .32s var(--ease-out);}
+@keyframes chevronSettle{0%{transform:rotate(0);}62%{transform:rotate(104deg);}100%{transform:rotate(90deg);}}
+.nt-ico,.nt-file{font-size:0.88rem;flex-shrink:0;line-height:1;}
+.nt-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;
+  background:var(--nt-accent,var(--muted));box-shadow:0 0 8px -1px var(--nt-accent,transparent);}
+.nt-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* Nesting — one hairline guide line per level (connective-line motif as tree structure) */
+.nt-children{display:none;margin-left:0.8rem;padding-left:0.5rem;border-left:1px solid rgba(255,255,255,0.08);}
+.nt-children.open{display:block;animation:ntReveal .2s var(--ease-out);}
+@keyframes ntReveal{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
+.nt-empty{font-size:0.74rem;color:var(--muted);opacity:0.7;font-style:italic;padding:0.3rem 0.5rem;}
+
+/* ── Floating action menu (FAB) ── */
+#sb-fab{position:fixed;right:1.25rem;bottom:1.25rem;z-index:150;
+  display:flex;flex-direction:column;align-items:flex-end;gap:0.55rem;}
+.fab-pills{display:flex;flex-direction:column;align-items:flex-end;gap:0.5rem;}
+.fab-pill{display:inline-flex;align-items:center;gap:0.5rem;white-space:nowrap;font-size:0.82rem;opacity:0;pointer-events:none;}
+.fab-pill-ico{font-size:0.95rem;line-height:1;}
+.fab-pill-danger{background:rgba(255,63,108,0.12);border-color:rgba(255,63,108,0.45);color:#ff7a98;}
+.fab-pill-danger:hover{background:rgba(255,63,108,0.2);border-color:var(--accent);}
+#sb-fab.open .fab-pill{pointer-events:auto;animation:fabPillIn .26s var(--ease-out) both;}
+@keyframes fabPillIn{from{opacity:0;transform:translateY(12px) scale(0.96);}to{opacity:1;transform:translateY(0) scale(1);}}
+
+.fab-trigger{width:54px;height:54px;border-radius:50%;position:relative;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--text);
+  background:var(--glass-bg-hover);
+  backdrop-filter:blur(16px) saturate(140%); -webkit-backdrop-filter:blur(16px) saturate(140%);
+  border:1px solid var(--glass-bd-hover);
+  box-shadow:var(--glass-sheen), 0 10px 30px rgba(0,0,0,0.45);
+  transition:transform var(--dur-1) var(--ease-out),border-color var(--dur-2),background var(--dur-2);
+  animation:fabBreathe 4.5s ease-in-out infinite;}
+.fab-trigger:hover{transform:translateY(-2px);border-color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);}
+.fab-trigger:active{transform:scale(0.95);}
+@keyframes fabBreathe{
+  0%,100%{box-shadow:var(--glass-sheen),0 10px 30px rgba(0,0,0,0.45),0 0 0 0 rgba(255,63,108,0);}
+  50%{box-shadow:var(--glass-sheen),0 10px 30px rgba(0,0,0,0.45),0 0 22px 2px rgba(255,63,108,0.16);}}
+#sb-fab.open .fab-trigger{animation:none;}
+.fab-ico{position:absolute;width:22px;height:22px;transition:opacity var(--dur-2),transform var(--dur-2) var(--ease-out);}
+.fab-ico-mark{opacity:0.85;transform:rotate(0);}
+.fab-ico-close{opacity:0;transform:rotate(-90deg);}
+#sb-fab.open .fab-ico-mark{opacity:0;transform:rotate(90deg);}
+#sb-fab.open .fab-ico-close{opacity:1;transform:rotate(0);}
+
+/* Mobile — popover spans width; lighter blur for GPU budget */
+@media(max-width:768px){
+  .nav-panel{top:60px;right:10px;left:10px;width:auto;max-width:none;}
+  #sb-fab{right:1rem;bottom:1rem;}
+  .fab-trigger{backdrop-filter:blur(10px) saturate(130%);-webkit-backdrop-filter:blur(10px) saturate(130%);}
+}
+
+/* Reduced motion — nav + FAB */
+@media(prefers-reduced-motion:reduce){
+  .nav-panel{transition:opacity .12s linear;transform:none;}
+  .nav-panel.open{transform:none;}
+  .nt-children.open{animation:none;}
+  .nt-branch.open>.nt-chevron{animation:none;}
+  .nt-chevron{transition:none;}
+  #sb-fab.open .fab-pill{animation:none;}
+  .fab-trigger{animation:none;}
+  .fab-ico{transition:none;}
+}

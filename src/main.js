@@ -7,6 +7,7 @@ import './styles/classes.css';
 
 import { nav, openNav, closeNav, initNavCallbacks, initNavListeners, ROUTES, _routing } from './components/Navigation.js';
 import { initDeckCardCallbacks } from './components/DeckCard.js';
+import { initFab, initFabUI } from './components/Fab.js';
 import { toggleDeckMenu, openAssignClassModal, openCreateClassModal, openClassMenu, initModalCallbacks, openGuestSignupModal, closeGuestSignupModal } from './components/Modals.js';
 import { initDeckCallbacks, getDecks, getDeckById, deleteDeck, initBuiltins } from './engine/decks.js';
 import { initAuth, syncOnBoot, scheduleSync, openAuthModal, updateAuthStatus, initAuthCallbacks, isLoggedIn } from './engine/auth.js';
@@ -66,7 +67,7 @@ function wireCallbacks() {
   initAuthCallbacks({ toast, refreshAll });
   initDeckCallbacks(toast, refreshAll);
   initModalCallbacks({ toast, refreshAll, deleteDeck });
-  initNavCallbacks({ refreshDashboard, refreshClasses, refreshQuizSelect, refreshSavedTests, refreshWeakSpots });
+  initNavCallbacks({ refreshDashboard, refreshClasses, refreshQuizSelect, refreshSavedTests, refreshWeakSpots, openClassQuizPanel });
   initDeckCardCallbacks({ quickStartDeck, drillDeck, toggleDeckMenu, openAssignClassModal });
   initQuizCallbacks({ toast, refreshAll, nav, refreshDashboard, refreshQuizSelect, refreshWeakSpots });
   initDashboardCallbacks({ nav });
@@ -75,6 +76,7 @@ function wireCallbacks() {
   initSavedTestsCallbacks({ toast, nav, refreshAll });
   initWeakSpotsCallbacks({ toast, nav });
   initGeneratorCallbacks({ toast, nav, refreshAll });
+  initFab({ toast, openApiModal });
 }
 
 // ── Expose onclick-referenced functions to window ──
@@ -247,6 +249,7 @@ async function boot() {
   initKeyboard();
   initFullscreenImage();
   initClickOutside();
+  initFabUI();
   initHashRouting();
   setupDropZone();
   updateKeyBadge();

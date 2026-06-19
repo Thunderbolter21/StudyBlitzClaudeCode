@@ -23,33 +23,25 @@
     <img src="/logo.png" alt="StudyBlitz" style="height:58px;width:auto;object-fit:contain;" />
   </button>
   <button id="topbar-signin-btn" class="btn btn-primary btn-sm" style="display:none;" onclick="openAuthModal('signin')">Sign In</button>
-  <button class="hamburger" onclick="openNav()" aria-label="Menu">
-    <span></span><span></span><span></span>
+  <button class="hamburger nav-trigger" onclick="openNav()" aria-label="Open navigation menu">
+    <svg class="nav-trigger-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 12h-8"/><path d="M21 6H8"/><path d="M21 18h-8"/>
+      <path d="M3 6v4c0 1.1.9 2 2 2h3"/><path d="M3 10v6c0 1.1.9 2 2 2h3"/>
+    </svg>
   </button>
 </div>
 
 <!-- ══════════════ NAV PANEL (slide-in right) ══════════════ -->
 <div class="nav-overlay" id="nav-overlay" onclick="closeNav()"></div>
-<div class="nav-panel" id="nav-panel">
-  <div class="nav-panel-head">
-    <div class="nav-panel-brand">STUDY<span>BLITZ</span></div>
-    <button class="nav-close" onclick="closeNav()">✕</button>
+<div class="nav-panel" id="nav-panel" role="navigation" aria-label="Main menu">
+  <div class="nav-tree-head">
+    <span class="nav-tree-title">MENU</span>
+    <button class="nav-close" onclick="closeNav()" aria-label="Close menu">✕</button>
   </div>
-  <button class="nav-item active" data-page="dashboard"><span class="icon">🏠</span><span>Dashboard</span></button>
-  <button class="nav-item" data-page="classes"><span class="icon">🎓</span><span>Classes</span></button>
-  <button class="nav-item" data-page="quiz-select"><span class="icon">🎮</span><span>Quick Quiz</span></button>
-  <button class="nav-item" data-page="generator"><span class="icon">🛠️</span><span>Quiz Builder</span></button>
-  <button class="nav-item" data-page="saved-tests"><span class="icon">📁</span><span>Saved Tests</span></button>
-  <button class="nav-item" data-page="weak-spots"><span class="icon">🎯</span><span>Weak Spots</span></button>
-  <div style="flex:1;"></div>
-  <div style="padding:0.8rem 1.5rem;border-top:1px solid var(--border);">
+  <div class="nav-tree" id="nav-tree-root"></div>
+  <div class="nav-tree-foot">
     <div id="auth-status" style="font-size:0.72rem;color:var(--muted);padding:0.2rem 0;"></div>
-    <div id="sb-sync-status" style="font-size:0.68rem;padding:0.1rem 0 0.25rem;display:none;"></div>
-    <button class="nav-item" id="link-account-btn" style="color:var(--muted);font-size:0.78rem;padding:0.5rem 0;">
-      <span class="icon">🔗</span><span>Sign In / Create Account</span>
-    </button>
-  </div>
-  <div style="padding:0.3rem 1.5rem 1rem;border-top:1px solid var(--border);">
+    <div id="sb-sync-status" style="font-size:0.68rem;padding:0.1rem 0 0.3rem;display:none;"></div>
     <button onclick="showGettingStarted();closeNav();" class="nav-gs-link">
       <span style="font-size:0.85rem;">📖</span> Getting Started Guide
     </button>
