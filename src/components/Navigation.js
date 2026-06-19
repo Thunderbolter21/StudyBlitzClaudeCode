@@ -154,6 +154,14 @@ export function renderNavTree() {
 
   // Classes ▸ class ▸ deck
   const classesBranch = _branchRow({ icon: '📁', label: 'Classes' });
+  // "Pegboard" tag — navigates to the Classes page without toggling the tree.
+  const pegboard = document.createElement('button');
+  pegboard.type = 'button';
+  pegboard.className = 'nt-page-tag btn-glass';
+  pegboard.textContent = 'Pegboard';
+  pegboard.title = 'Open Classes page';
+  pegboard.addEventListener('click', (e) => { e.stopPropagation(); _goTo('classes'); });
+  classesBranch.row.appendChild(pegboard);
   root.appendChild(classesBranch.row);
   root.appendChild(classesBranch.children);
 
