@@ -599,3 +599,10 @@ select:disabled{opacity:0.4;cursor:not-allowed;}
   .fab-trigger{animation:none;}
   .fab-ico{transition:none;}
 }
+
+/* ════════════ 3D CLASSES BOARD — Step 3 (Three.js key-hook board) ════════════ */
+/* While the board is mounted, the page hosts only the 3D stage (legacy cards hidden). */
+#page-classes.kb-active{position:relative;padding:0;}
+#page-classes.kb-active > :not(.kb-stage){display:none;}
+.kb-stage{position:absolute;inset:0;overflow:hidden;background:var(--bg);}
+.kb-stage canvas{display:block;width:100%;height:100%;}

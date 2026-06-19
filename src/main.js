@@ -8,6 +8,7 @@ import './styles/classes.css';
 import { nav, openNav, closeNav, initNavCallbacks, initNavListeners, ROUTES, _routing } from './components/Navigation.js';
 import { initDeckCardCallbacks } from './components/DeckCard.js';
 import { initFab, initFabUI } from './components/Fab.js';
+import { initKeyBoard, destroyKeyBoard } from './pages/keyBoard.js';
 import { toggleDeckMenu, openAssignClassModal, openCreateClassModal, openClassMenu, initModalCallbacks, openGuestSignupModal, closeGuestSignupModal } from './components/Modals.js';
 import { initDeckCallbacks, getDecks, getDeckById, deleteDeck, initBuiltins } from './engine/decks.js';
 import { initAuth, syncOnBoot, scheduleSync, openAuthModal, updateAuthStatus, initAuthCallbacks, isLoggedIn } from './engine/auth.js';
@@ -67,7 +68,7 @@ function wireCallbacks() {
   initAuthCallbacks({ toast, refreshAll });
   initDeckCallbacks(toast, refreshAll);
   initModalCallbacks({ toast, refreshAll, deleteDeck });
-  initNavCallbacks({ refreshDashboard, refreshClasses, refreshQuizSelect, refreshSavedTests, refreshWeakSpots, openClassQuizPanel });
+  initNavCallbacks({ refreshDashboard, refreshClasses, refreshQuizSelect, refreshSavedTests, refreshWeakSpots, openClassQuizPanel, initKeyBoard, destroyKeyBoard });
   initDeckCardCallbacks({ quickStartDeck, drillDeck, toggleDeckMenu, openAssignClassModal });
   initQuizCallbacks({ toast, refreshAll, nav, refreshDashboard, refreshQuizSelect, refreshWeakSpots });
   initDashboardCallbacks({ nav });

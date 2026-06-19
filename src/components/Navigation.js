@@ -3,7 +3,7 @@
 import { getClasses } from '../engine/classes.js';
 import { getDecks, getDeckColor } from '../engine/decks.js';
 
-let _refreshDashboard, _refreshClasses, _refreshQuizSelect, _refreshSavedTests, _refreshWeakSpots, _openClassQuizPanel;
+let _refreshDashboard, _refreshClasses, _refreshQuizSelect, _refreshSavedTests, _refreshWeakSpots, _openClassQuizPanel, _initKeyBoard, _destroyKeyBoard;
 
 // Hash route names → nav() page keys
 export const ROUTES = {
@@ -28,13 +28,15 @@ const PAGE_TO_ROUTE = {
 // Shared object so main.js can read the flag by reference
 export const _routing = { navInProgress: false };
 
-export function initNavCallbacks({ refreshDashboard, refreshClasses, refreshQuizSelect, refreshSavedTests, refreshWeakSpots, openClassQuizPanel }) {
+export function initNavCallbacks({ refreshDashboard, refreshClasses, refreshQuizSelect, refreshSavedTests, refreshWeakSpots, openClassQuizPanel, initKeyBoard, destroyKeyBoard }) {
   _refreshDashboard = refreshDashboard;
   _refreshClasses = refreshClasses;
   _refreshQuizSelect = refreshQuizSelect;
   _refreshSavedTests = refreshSavedTests;
   _refreshWeakSpots = refreshWeakSpots;
   _openClassQuizPanel = openClassQuizPanel;
+  _initKeyBoard = initKeyBoard;
+  _destroyKeyBoard = destroyKeyBoard;
 }
 
 function _prefersReducedMotion() {
@@ -43,6 +45,10 @@ function _prefersReducedMotion() {
 
 // The actual page swap + routing. Logic is unchanged from the original nav().
 function _applyNav(page) {
+  // Tear down the 3D Classes board when navigating away from #classes.
+  if (page !== 'classes' && document.getElementById('page-classes')?.classList.contains('active')) {
+    _destroyKeyBoard?.();
+  }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const pg = document.getElementById('page-'+page);
@@ -59,6 +65,8 @@ function _applyNav(page) {
   if (page === 'quiz-select') _refreshQuizSelect?.();
   if (page === 'saved-tests') _refreshSavedTests?.();
   if (page === 'weak-spots') _refreshWeakSpots?.();
+  // Mount the 3D Classes board when entering #classes (idempotent).
+  if (page === 'classes') _initKeyBoard?.(document.getElementById('page-classes'));
 
   // Update URL hash — flag prevents the hashchange listener from re-firing
   const route = PAGE_TO_ROUTE[page] || page;
