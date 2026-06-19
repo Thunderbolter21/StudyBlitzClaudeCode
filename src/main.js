@@ -215,6 +215,17 @@ function initHashRouting() {
   window.addEventListener('hashchange', handleHashChange);
 }
 
+// ── Service worker update: auto-reload when a new SW takes over an existing page ──
+// skipWaiting + clientsClaim (vite.config.js) cause controllerchange to fire when
+// a new deploy activates. We reload once so users get the fresh bundle automatically.
+// First-time visitors (controller === null on load) are skipped — no reload loop.
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController) window.location.reload();
+  });
+}
+
 // ── Console easter egg (Claude & Matt) ──
 function consoleEasterEgg() {
   try {
