@@ -201,20 +201,17 @@ function _fobShape(w, h, r, holeY, holeR) {
   return s;
 }
 
-// Engraved name: a dark recessed shadow beneath a LIGHT face — light-on-dark
-// reads against the dark glass block (the r128 dark-on-dark version vanished).
 function _makeLabel(name) {
-  const c = document.createElement('canvas'); c.width = 340; c.height = 130;
+  const c = document.createElement('canvas'); c.width = 420; c.height = 150;
   const x = c.getContext('2d');
   x.textAlign = 'center'; x.textBaseline = 'middle';
-  // Arial Narrow is a Windows system font (sync-available); fallback stack is safe.
-  const font = n => `700 ${n}px "Arial Narrow","Helvetica Neue",Arial,sans-serif`;
-  let fs = 48; x.font = font(fs);
-  while (x.measureText(name).width > 300 && fs > 22) { fs -= 2; x.font = font(fs); }
-  x.fillStyle = 'rgba(0,0,0,0.55)';       x.fillText(name, 170, 70.5); // recessed shadow (engrave depth)
-  x.fillStyle = 'rgba(236,236,246,0.92)'; x.fillText(name, 170, 67);   // light engraved face
+  const font = n => `700 ${n}px sans-serif`;
+  let fs = 54; x.font = font(fs);
+  while (x.measureText(name).width > 380 && fs > 22) { fs -= 2; x.font = font(fs); }
+  x.fillStyle = 'rgba(0,0,0,0.55)';         x.fillText(name, 210, 78); // recessed shadow (engrave depth)
+  x.fillStyle = 'rgba(240,240,250,0.95)';   x.fillText(name, 210, 75); // light engraved face
   const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;    // r184 color management — tag color maps or they render wrong
+  t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
   t.needsUpdate = true;
   return t;
@@ -222,7 +219,7 @@ function _makeLabel(name) {
 
 function _makeKey(cls, hookIndex, metal) {
   const color = _toNum(cls.color);
-  const FW = 120, FH = 66, DEPTH = 16, HOLEY = FH / 2 - 15, HOLER = 7;
+  const FW = 120, FH = 66, DEPTH = 16, HOLEY = FH / 2 - 10, HOLER = 7;
   const pivot = new THREE.Group();
   const body = new THREE.Group();
 
@@ -234,14 +231,13 @@ function _makeKey(cls, hookIndex, metal) {
   const geo = new THREE.ExtrudeGeometry(shape, { depth: DEPTH, bevelEnabled: true, bevelThickness: 3, bevelSize: 3, bevelSegments: 4, steps: 1, curveSegments: 20 });
   geo.translate(0, 0, -DEPTH / 2);
   const capMat = new THREE.MeshPhysicalMaterial({
-    color: 0x16161e, metalness: 0, roughness: 0.4, clearcoat: 1, clearcoatRoughness: 0.2,
-    transparent: true, opacity: 0.6, envMap: _env, envMapIntensity: 2.0, reflectivity: 0.7,
-    side: THREE.DoubleSide,
+    color: 0x0e0e15, roughness: 0.42, clearcoat: 1, clearcoatRoughness: 0.22,
+    transparent: true, opacity: 0.74, envMap: _env, envMapIntensity: 0.7,
+    reflectivity: 0.5, side: THREE.DoubleSide,
   });
-  // emissive = live class color (a hex number → interpreted as sRGB under r184 color management).
   const edgeMat = new THREE.MeshStandardMaterial({
-    color: 0x101018, emissive: color, emissiveIntensity: 0.9, roughness: 0.5,
-    transparent: true, opacity: 0.9,
+    color: 0x0c0c12, emissive: color, emissiveIntensity: 1.0, roughness: 0.5,
+    transparent: true, opacity: 0.92,
   });
   const block = new THREE.Mesh(geo, [capMat, edgeMat]); block.userData.key = cls; body.add(block); _pickable.push(block);
 
@@ -250,10 +246,12 @@ function _makeKey(cls, hookIndex, metal) {
   const eyelet = new THREE.Mesh(new THREE.TorusGeometry(HOLER + 1.4, 1.8, 10, 24), eMat);
   eyelet.position.set(0, HOLEY, 0); body.add(eyelet);
 
-  // Engraved name plate — seated just in front of the glass face, drawn after it.
-  const lMat = new THREE.MeshBasicMaterial({ map: _makeLabel(cls.name), transparent: true, opacity: 0.95, depthWrite: false });
+  const lMat = new THREE.MeshBasicMaterial({
+    map: _makeLabel(cls.name), transparent: true, opacity: 0.95,
+    depthTest: false, depthWrite: false, side: THREE.DoubleSide,
+  });
   const lbl = new THREE.Mesh(new THREE.PlaneGeometry(98, 38), lMat);
-  lbl.position.set(4, -6, DEPTH / 2 + 0.6); lbl.renderOrder = 2; body.add(lbl); lbl.userData.key = cls; _pickable.push(lbl);
+  lbl.position.set(4, -6, DEPTH / 2 + 1.5); lbl.renderOrder = 999; body.add(lbl); lbl.userData.key = cls; _pickable.push(lbl);
 
   body.position.y = -HOLEY;       // hang so the punched hole sits at the pivot
   pivot.add(body);
@@ -261,7 +259,7 @@ function _makeKey(cls, hookIndex, metal) {
   pivot.position.set(h.x, h.y, h.z);
   _scene.add(pivot);
 
-  const mats = [{ m: capMat, b: 0.6 }, { m: edgeMat, b: 0.9 }, { m: eMat, b: 1 }, { m: lMat, b: 0.95 }];
+  const mats = [{ m: capMat, b: 0.74 }, { m: edgeMat, b: 0.92 }, { m: eMat, b: 1 }, { m: lMat, b: 0.95 }];
   _keys.push({
     cls, pivot, body, hookIndex, ang: 0, vel: 0,
     pp: new THREE.Vector3(h.x, h.y, h.z), pt: new THREE.Vector3(h.x, h.y, h.z),
