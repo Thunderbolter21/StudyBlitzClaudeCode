@@ -30,7 +30,7 @@ let _panel = null, _zoom = null;
 let _onPtrDown = null, _onPtrMove = null, _onPtrUp = null, _onDocPtrMove = null;
 
 // Injected callbacks — set via initKeyBoardCallbacks before first initKeyBoard call
-let _cbOpenQuizPanel = null, _cbNav = null;
+let _cbOpenQuizPanel = null, _cbNav = null, _cbToggleDeckMenu = null;
 
 // Raycaster — module-level, reused every frame
 const _ray = new THREE.Raycaster();
@@ -49,9 +49,10 @@ const _toNum = (hex) => {
 const _hex = (n) => '#' + _toNum(n).toString(16).padStart(6, '0');
 
 /* ── Callback injection ───────────────────────────────────────── */
-export function initKeyBoardCallbacks({ openClassQuizPanel, nav }) {
+export function initKeyBoardCallbacks({ openClassQuizPanel, nav, toggleDeckMenu }) {
   _cbOpenQuizPanel = openClassQuizPanel;
   _cbNav = nav;
+  _cbToggleDeckMenu = toggleDeckMenu;
 }
 
 /* ── initKeyBoard ─────────────────────────────────────────────── */
@@ -141,6 +142,9 @@ export function destroyKeyBoard() {
 
   _stop();
 
+  // Close any open app deck-context menu (it lives on document.body, not _stage).
+  document.getElementById('deck-ctx-menu')?.remove();
+
   if (_onResize) window.removeEventListener('resize', _onResize);
   if (_onVis) document.removeEventListener('visibilitychange', _onVis);
   if (_onDocPtrMove) document.removeEventListener('pointermove', _onDocPtrMove);
@@ -207,6 +211,7 @@ function _showPanel(k) {
     decks.forEach((deck, i) => {
       const weakQs = deck.questions.filter(q => isWeak(getRec(mem, q.id)));
       html += `<div class="kb-dcard" style="animation-delay:${i * 80}ms">
+        <button class="deck-ellipsis kb-ellipsis" title="Options" data-did="${deck.id}">⋯</button>
         <div class="kb-dn">${deck.name}</div>
         <div class="kb-ds">${deck.questions.length} question${deck.questions.length !== 1 ? 's' : ''}${weakQs.length ? ` · <span class="kb-weak">${weakQs.length} weak</span>` : ''}</div>
         <button class="kb-qz" style="background:${colorHex}" data-did="${deck.id}">▶ Quiz</button>
@@ -228,6 +233,12 @@ function _showPanel(k) {
       const deck = getDecks().find(d => d.id === btn.dataset.did);
       if (deck) _cbOpenQuizPanel?.(deck, cls);
     });
+  });
+  // Ellipsis menus — reuse the app-wide deck context menu (toggleDeckMenu).
+  // It stopPropagation()s + positions at e.clientX/Y and appends #deck-ctx-menu
+  // to document.body, exactly as on every other deck card in the app.
+  _panel.querySelectorAll('.kb-ellipsis').forEach(btn => {
+    btn.addEventListener('click', (e) => _cbToggleDeckMenu?.(e, btn.dataset.did));
   });
   // Empty-state build button
   _panel.querySelector('.kb-build')?.addEventListener('click', () => _cbNav?.('generator'));

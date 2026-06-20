@@ -68,7 +68,7 @@ function wireCallbacks() {
   initAuthCallbacks({ toast, refreshAll });
   initDeckCallbacks(toast, refreshAll);
   initModalCallbacks({ toast, refreshAll, deleteDeck });
-  initKeyBoardCallbacks({ openClassQuizPanel, nav });
+  initKeyBoardCallbacks({ openClassQuizPanel, nav, toggleDeckMenu });
   initNavCallbacks({ refreshDashboard, refreshClasses, refreshQuizSelect, refreshSavedTests, refreshWeakSpots, openClassQuizPanel, initKeyBoard, destroyKeyBoard });
   initDeckCardCallbacks({ quickStartDeck, drillDeck, toggleDeckMenu, openAssignClassModal });
   initQuizCallbacks({ toast, refreshAll, nav, refreshDashboard, refreshQuizSelect, refreshWeakSpots });
