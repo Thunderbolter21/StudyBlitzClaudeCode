@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StudyBlitz — Key Hook Board v2</title>
+<style>
+  :root{--bg:#080810;--text:#f4f4f8;--muted:rgba(255,255,255,0.45);--hair:rgba(255,255,255,0.10);}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden;}
+  canvas{display:block;position:fixed;inset:0;}
+  #ui{position:fixed;top:26px;left:30px;z-index:5;pointer-events:none;}
+  #ui h1{font-family:'Arial Narrow','Segoe UI',sans-serif;font-weight:700;font-size:3.4rem;
+    letter-spacing:0.12em;line-height:0.95;text-transform:uppercase;}
+  #ui .sub{font-family:Georgia,serif;font-style:italic;font-size:1.12rem;color:#b57bee;margin-top:2px;}
+  #ui .hint{font-family:ui-monospace,monospace;font-size:0.68rem;color:var(--muted);margin-top:12px;}
+
+  /* zoom control */
+  #zoom{position:fixed;right:20px;top:50%;transform:translateY(-50%);z-index:6;
+    display:flex;flex-direction:column;align-items:center;gap:10px;}
+  #zoom button{width:34px;height:34px;border-radius:50%;border:1px solid var(--hair);
+    background:rgba(20,20,28,0.8);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+    color:var(--text);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:background .15s;}
+  #zoom button:hover{background:rgba(255,255,255,0.12);}
+  #zoom input[type=range]{writing-mode:vertical-lr;-webkit-appearance:slider-vertical;
+    appearance:slider-vertical;width:8px;height:150px;cursor:pointer;direction:rtl;}
+
+  /* left dock panel */
+  #panel{position:fixed;left:0;top:0;height:100vh;width:340px;z-index:8;
+    background:linear-gradient(160deg,rgba(12,12,18,0.94),rgba(8,8,12,0.96));
+    -webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);
+    border-right:1px solid var(--hair);box-shadow:30px 0 80px -30px rgba(0,0,0,0.8);
+    transform:translateX(-105%);transition:transform .5s cubic-bezier(.22,1,.36,1);
+    padding:34px 22px 22px;overflow-y:auto;}
+  #panel.show{transform:translateX(0);}
+  #panel .phead{display:flex;align-items:center;gap:11px;cursor:grab;
+    padding-bottom:16px;margin-bottom:8px;border-bottom:1px solid var(--hair);}
+  #panel .phead .dot{width:13px;height:13px;border-radius:50%;flex:0 0 auto;}
+  #panel .phead .nm{font-family:'Arial Narrow',sans-serif;font-weight:700;font-size:1.7rem;
+    letter-spacing:0.04em;text-transform:uppercase;line-height:1;}
+  #panel .phint{font-family:ui-monospace,monospace;font-size:0.6rem;color:var(--muted);
+    margin-bottom:14px;}
+  .dcard{background:rgba(255,255,255,0.035);border:1px solid var(--hair);border-radius:14px;
+    padding:14px 15px;margin-bottom:11px;opacity:0;transform:translateY(-14px);}
+  #panel.show .dcard{animation:fall .5s cubic-bezier(.22,1,.36,1) forwards;}
+  .dcard .dn{font-family:'Arial Narrow',sans-serif;font-weight:700;font-size:1.15rem;
+    letter-spacing:0.03em;line-height:1.1;}
+  .dcard .ds{font-size:0.7rem;color:var(--muted);margin:6px 0 11px;font-family:ui-monospace,monospace;}
+  .dcard .ds .weak{color:#ff6b6b;}
+  .dcard .qz{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:999px;
+    padding:7px 18px;font:inherit;font-size:0.8rem;font-weight:600;color:#fff;cursor:pointer;
+    transition:transform .15s, filter .15s;}
+  .dcard .qz:hover{transform:scale(1.05);filter:brightness(1.1);}
+  .ecard{padding:20px 15px;text-align:center;color:var(--muted);font-size:0.8rem;line-height:1.6;}
+  .ecard .build{margin-top:10px;background:rgba(255,255,255,0.07);border:1px solid var(--hair);
+    border-radius:999px;color:var(--text);font:inherit;font-size:0.78rem;padding:8px 16px;cursor:pointer;}
+  @keyframes fall{to{opacity:1;transform:translateY(0);}}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>Classes</h1>
+  <div class="sub">your whole semester, hanging on the wall</div>
+  <div class="hint">// grab a key · drop near a hook to re-hang · drop in open space to open its decks</div>
+</div>
+<div id="zoom">
+  <button id="zin">+</button>
+  <input id="zrange" type="range" min="0" max="100" value="50">
+  <button id="zout">−</button>
+</div>
+<div id="panel"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
+<script>
+const CLASSES=[
+  {id:'ac',name:'Accounting 210',color:0xff3f6c,hook:0,decks:[['Accounting Exam 2',45,10],['Chapters 5,6 Review',60,25],['Final Exam',30,2]]},
+  {id:'mkt',name:'Marketing 300',color:0xff8c42,hook:2,decks:[['MKT 300 Exam 3',41,20],['Marketing Final',50,10],['General Ch.1-8',40,10]]},
+  {id:'macro',name:'Macroeconomics',color:0xb57bee,hook:5,decks:[['Agg. Supply/Demand',38,14],['Final Study Guide',22,3],['ECON Exam 3',33,6]]},
+  {id:'csm',name:'CSM 201',color:0x00e5a0,hook:7,decks:[]},
+  {id:'calc',name:'Calculus 1',color:0x38b2ff,hook:9,decks:[]},
+];
+const HOOKS=[];const cols=[-300,-100,100,300],rows=[150,0,-150];let hi=0;
+rows.forEach(y=>cols.forEach(x=>HOOKS.push({id:hi++,x,y,z:30})));
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const hex=n=>'#'+n.toString(16).padStart(6,'0');
+
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(46,innerWidth/innerHeight,1,5000);
+camera.position.set(0,0,560);
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0x5a5a72,0.8));
+const dir=new THREE.DirectionalLight(0xffffff,0.95);dir.position.set(-0.5,1,1.4);scene.add(dir);
+const rim=new THREE.PointLight(0xb57bee,0.55,1800);rim.position.set(-260,170,280);scene.add(rim);
+const warm=new THREE.PointLight(0xff8c42,0.3,1800);warm.position.set(300,-120,300);scene.add(warm);
+
+// environment for glass reflections — true PMREM image-based lighting
+function bakedEnv(){
+  const c=document.createElement('canvas');c.width=512;c.height=256;const x=c.getContext('2d');
+  const g=x.createLinearGradient(0,0,0,256);
+  g.addColorStop(0,'#3a3a52');g.addColorStop(0.45,'#14141d');g.addColorStop(1,'#05050a');
+  x.fillStyle=g;x.fillRect(0,0,512,256);
+  const b=x.createRadialGradient(150,60,10,150,60,140);
+  b.addColorStop(0,'rgba(255,255,255,0.9)');b.addColorStop(1,'rgba(255,255,255,0)');
+  x.fillStyle=b;x.fillRect(0,0,512,256);
+  const t=new THREE.CanvasTexture(c);t.mapping=THREE.EquirectangularReflectionMapping;return t;
+}
+let ENV;
+try{
+  const pmrem=new THREE.PMREMGenerator(renderer);
+  ENV=pmrem.fromScene(new THREE.RoomEnvironment(),0.04).texture; // true IBL, roughness-aware
+}catch(err){
+  console.warn('PMREM env unavailable, using baked fallback',err);
+  ENV=bakedEnv();
+}
+scene.environment=ENV;
+
+// wall
+function wallTexture(){
+  const c=document.createElement('canvas');c.width=c.height=1024;const x=c.getContext('2d');
+  x.fillStyle='#0d0d14';x.fillRect(0,0,1024,1024);
+  const g=x.createRadialGradient(512,150,80,512,520,760);
+  g.addColorStop(0,'rgba(120,90,200,0.18)');g.addColorStop(1,'rgba(120,90,200,0)');
+  x.fillStyle=g;x.fillRect(0,0,1024,1024);
+  x.strokeStyle='rgba(255,255,255,0.035)';x.lineWidth=1;
+  for(let i=0;i<=1024;i+=48){x.beginPath();x.moveTo(i,0);x.lineTo(i,1024);x.stroke();
+    x.beginPath();x.moveTo(0,i);x.lineTo(1024,i);x.stroke();}
+  return new THREE.CanvasTexture(c);
+}
+const wall=new THREE.Mesh(new THREE.PlaneGeometry(1700,1100),
+  new THREE.MeshBasicMaterial({map:wallTexture()}));
+wall.position.z=-4;scene.add(wall);
+
+const metal=new THREE.MeshPhongMaterial({color:0xc2c2cc,specular:0xffffff,shininess:95});
+
+// hooks
+function makeHook(h){
+  const g=new THREE.Group();
+  const mount=new THREE.Mesh(new THREE.CylinderGeometry(8,9,7,20),metal);mount.rotation.x=Math.PI/2;mount.position.z=3.5;g.add(mount);
+  const shaft=new THREE.Mesh(new THREE.CylinderGeometry(4.4,4.4,26,16),metal);shaft.rotation.x=Math.PI/2;shaft.position.z=19;g.add(shaft);
+  const stub=new THREE.Mesh(new THREE.CylinderGeometry(4.4,4.4,18,16),metal);stub.position.set(0,9,30);g.add(stub);
+  const cap=new THREE.Mesh(new THREE.SphereGeometry(4.6,14,14),metal);cap.position.set(0,18,30);g.add(cap);
+  g.position.set(h.x,h.y,0);scene.add(g);
+}
+HOOKS.forEach(makeHook);
+
+// rounded-rect shape with a punched hole near top
+function fobShape(w,h,r,holeY,holeR){
+  const s=new THREE.Shape();const x=-w/2,y=-h/2;
+  s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);
+  s.lineTo(x+w,y+h-r);s.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  s.lineTo(x+r,y+h);s.quadraticCurveTo(x,y+h,x,y+h-r);
+  s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);
+  const hole=new THREE.Path();hole.absarc(0,holeY,holeR,0,Math.PI*2,true);s.holes.push(hole);
+  return s;
+}
+function makeLabel(name){
+  const c=document.createElement('canvas');c.width=340;c.height=130;const x=c.getContext('2d');
+  x.textAlign='center';x.textBaseline='middle';
+  let fs=48;x.font='700 '+fs+'px "Arial Narrow",Arial,sans-serif';
+  while(x.measureText(name).width>300&&fs>22){fs-=2;x.font='700 '+fs+'px "Arial Narrow",Arial,sans-serif';}
+  // engraved look: dark recessed fill + faint top highlight offset for bevel
+  x.fillStyle='rgba(255,255,255,0.10)';x.fillText(name,170,69); // lower-light catch
+  x.fillStyle='rgba(0,0,0,0.62)';x.fillText(name,170,67);       // dark engraved body
+  const t=new THREE.CanvasTexture(c);t.anisotropy=4;return t;
+}
+
+const pickable=[],keys=[];
+function makeKey(cls){
+  const FW=120,FH=66,DEPTH=16,HOLEY=FH/2-15,HOLER=7;
+  const pivot=new THREE.Group();
+  const body=new THREE.Group();
+  // glass block
+  const shape=fobShape(FW,FH,16,HOLEY,HOLER);
+  let geo=new THREE.ExtrudeGeometry(shape,{depth:DEPTH,bevelEnabled:true,bevelThickness:3,bevelSize:3,bevelSegments:4,steps:1,curveSegments:20});
+  geo.translate(0,0,-DEPTH/2);
+  const glass=new THREE.MeshPhysicalMaterial({color:cls.color,metalness:0,roughness:0.38,
+    clearcoat:1,clearcoatRoughness:0.18,transparent:true,opacity:0.6,envMap:ENV,envMapIntensity:2.2,
+    reflectivity:0.7,emissive:cls.color,emissiveIntensity:0.22,side:THREE.DoubleSide});
+  const block=new THREE.Mesh(geo,glass);block.userData.key=cls;body.add(block);pickable.push(block);
+  // eyelet around the hole (metal, per-key clone so it can fade)
+  const eMat=metal.clone();eMat.transparent=true;
+  const eyelet=new THREE.Mesh(new THREE.TorusGeometry(HOLER+1.4,1.8,10,24),eMat);
+  eyelet.position.set(0,HOLEY,0);body.add(eyelet);
+  // color accent band (left edge, emissive)
+  const bMat=new THREE.MeshPhongMaterial({color:cls.color,emissive:cls.color,emissiveIntensity:1.1,shininess:80,transparent:true});
+  const band=new THREE.Mesh(new THREE.BoxGeometry(3.5,42,DEPTH+2.5),bMat);
+  band.position.set(-FW/2+8,-6,0);body.add(band);band.userData.key=cls;pickable.push(band);
+  // label
+  const lMat=new THREE.MeshBasicMaterial({map:makeLabel(cls.name),transparent:true,opacity:0.9,depthWrite:false});
+  const lbl=new THREE.Mesh(new THREE.PlaneGeometry(98,38),lMat);
+  lbl.position.set(4,-6,DEPTH/2-1.2);body.add(lbl);lbl.userData.key=cls;pickable.push(lbl);
+
+  // hang so the hole sits at the pivot
+  body.position.y=-(FH/2-HOLEY); // moves hole to pivot height... fob center below
+  body.position.y=-(HOLEY+ (FH/2-HOLEY)); // = -FH/2 ... place center so hole(top) at pivot
+  // simpler: hole local y = HOLEY (from center). want hole at pivot(0). so center at -HOLEY:
+  body.position.y=-HOLEY;
+  pivot.add(body);
+  const h=HOOKS[cls.hook];pivot.position.set(h.x,h.y,h.z);
+  scene.add(pivot);
+
+  const mats=[{m:glass,b:0.62},{m:eMat,b:1},{m:bMat,b:1},{m:lMat,b:1}];
+  const k={cls,pivot,body,ang:0,vel:0,mode:'hung',vis:1,
+    pt:new THREE.Vector3(h.x,h.y,h.z),pp:new THREE.Vector3(h.x,h.y,h.z),
+    phase:Math.random()*6.28,mats};
+  cls._k=k;keys.push(k);
+}
+CLASSES.forEach(makeKey);
+
+// interaction
+const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
+let held=null,presented=null;
+const panel=document.getElementById('panel');
+const setNDC=e=>{ndc.x=(e.clientX/innerWidth)*2-1;ndc.y=-(e.clientY/innerHeight)*2+1;};
+function onPlane(e,z){setNDC(e);ray.setFromCamera(ndc,camera);
+  const d=ray.ray.direction,o=ray.ray.origin,t=(z-o.z)/d.z;
+  return new THREE.Vector3(o.x+d.x*t,o.y+d.y*t,z);}
+
+renderer.domElement.addEventListener('pointerdown',e=>{
+  setNDC(e);ray.setFromCamera(ndc,camera);
+  const hit=ray.intersectObjects(pickable,false)[0];
+  if(hit){const k=hit.object.userData.key._k;if(k.mode==='presented')return;
+    if(presented&&presented!==k)dismiss();
+    held=k;k.mode='held';renderer.domElement.setPointerCapture(e.pointerId);}
+  else if(presented){dismiss();}
+});
+renderer.domElement.addEventListener('pointermove',e=>{
+  if(held){const p=onPlane(e,40);held.pt.set(p.x,p.y,40);}});
+renderer.domElement.addEventListener('pointerup',e=>{
+  if(!held)return;const k=held;held=null;const p=onPlane(e,40);
+  let best=null,bd=1e9;HOOKS.forEach(h=>{const d=Math.hypot(h.x-p.x,h.y-p.y);if(d<bd){bd=d;best=h;}});
+  if(bd<95){const occ=keys.find(o=>o!==k&&o.cls.hook===best.id);
+    if(occ){occ.cls.hook=k.cls.hook;occ.mode='hung';}
+    k.cls.hook=best.id;k.mode='hung';k.vel=0.25*(Math.random()-0.5);}
+  else{k.mode='presented';presented=k;showPanel(k);}
+});
+
+function showPanel(k){
+  const cls=k.cls;
+  let inner=`<div class="phead" id="phead"><span class="dot" style="background:${hex(cls.color)}"></span><span class="nm">${cls.name}</span></div>
+    <div class="phint">// click the title to re-hook this class</div>`;
+  if(cls.decks.length){
+    inner+=cls.decks.map((d,i)=>`<div class="dcard" style="animation-delay:${i*80}ms">
+      <div class="dn">${d[0]}</div>
+      <div class="ds">${d[1]} questions · <span class="weak">${d[2]} weak</span></div>
+      <button class="qz" style="background:${hex(cls.color)}">▶ Quiz</button></div>`).join('');
+  }else{
+    inner+=`<div class="dcard ecard" style="animation-delay:60ms">No decks on this key yet.<br>
+      <button class="build">＋ Build a deck</button></div>`;
+  }
+  panel.innerHTML=inner;panel.classList.add('show');
+  document.getElementById('phead').addEventListener('pointerdown',ev=>{ev.stopPropagation();dismiss();});
+}
+function dismiss(){if(presented){presented.mode='hung';presented=null;}panel.classList.remove('show');}
+
+// zoom
+let zTarget=560;
+const zr=document.getElementById('zrange');
+function applyZoom(){const v=+zr.value;zTarget=860-(v/100)*500;} // 0→860(out),100→360(in)
+zr.addEventListener('input',applyZoom);applyZoom();
+document.getElementById('zin').onclick=()=>{zr.value=Math.min(100,+zr.value+12);applyZoom();};
+document.getElementById('zout').onclick=()=>{zr.value=Math.max(0,+zr.value-12);applyZoom();};
+
+// parallax
+let mx=0,my=0;
+addEventListener('pointermove',e=>{if(reduce)return;mx=e.clientX/innerWidth-0.5;my=e.clientY/innerHeight-0.5;});
+
+const clock=new THREE.Clock();const lerp=(a,b,t)=>a+(b-a)*t;
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),0.05),t=clock.elapsedTime;
+  keys.forEach(k=>{
+    const h=HOOKS[k.cls.hook];
+    if(k.mode==='hung')k.pt.set(h.x,h.y,h.z);
+    else if(k.mode==='presented')k.pt.set(-320,90,200);
+    k.pivot.position.lerp(k.pt,k.mode==='held'?0.3:0.12);
+    // gentler pendulum
+    const vx=k.pivot.position.x-k.pp.x;k.pp.copy(k.pivot.position);
+    const G=11,DAMP=3.4;
+    k.vel+=(-G*Math.sin(k.ang)-DAMP*k.vel)*dt - vx*0.0038;
+    if(k.mode==='hung'&&!reduce)k.vel+=Math.sin(t*0.6+k.phase)*0.00022;
+    k.vel=Math.max(-0.06,Math.min(0.06,k.vel));
+    k.ang+=k.vel;k.ang=Math.max(-0.42,Math.min(0.42,k.ang));
+    if(k.mode==='presented')k.ang*=0.8;
+    k.pivot.rotation.z=k.ang;
+    // visibility fade for present
+    const vt=k.mode==='presented'?0:1;k.vis=lerp(k.vis,vt,0.14);
+    k.mats.forEach(o=>o.m.opacity=o.b*k.vis);
+    k.body.visible=k.vis>0.02;
+  });
+  camera.position.x+=(mx*70-camera.position.x)*0.05;
+  camera.position.y+=(-my*50-camera.position.y)*0.05;
+  camera.position.z+=(zTarget-camera.position.z)*0.08;
+  camera.lookAt(0,0,0);
+  renderer.render(scene,camera);
+}
+animate();
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);});
+console.log('%c🔑 key-hook v2 — crafted by Claude & Matt','color:#b57bee;font-weight:bold;font-size:13px');
+</script>
+</body>
+</html>
