@@ -99,12 +99,13 @@ export function initKeyBoard(container) {
   const metal = new THREE.MeshPhongMaterial({ color: 0xc2c2cc, specular: 0xffffff, shininess: 95 });
   _hooks.forEach(hk => _makeHook(hk, metal));
 
-  // Keys — one per real class
+  // Keys — one per real class, read fresh from storage every mount.
+  // Sequential assignment: class[i] → hook[i], so a newly created class
+  // always lands on the next empty hook without reshuffling existing ones.
   _keys = [];
   _pickable = [];
   const classes = getClasses();
-  const assign = _spreadHooks(classes.length, _hooks.length);
-  classes.forEach((cls, i) => _makeKey(cls, assign[i], metal));
+  classes.forEach((cls, i) => _makeKey(cls, i % _hooks.length, metal));
 
   // Panel + zoom overlays (inside _stage → auto-cleaned on teardown)
   _panel = _createPanel();
@@ -369,7 +370,10 @@ function _wallTexture() {
     x.beginPath(); x.moveTo(i, 0); x.lineTo(i, 1024); x.stroke();
     x.beginPath(); x.moveTo(0, i); x.lineTo(1024, i); x.stroke();
   }
-  return new THREE.CanvasTexture(c);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;  // r184: tag canvas textures or they render wrong
+  t.needsUpdate = true;
+  return t;
 }
 
 function _makeHook(h, metal) {
@@ -470,16 +474,6 @@ function _makeKey(cls, hookIndex, metal) {
   };
   cls._kb = k;   // back-ref so raycaster hit → key record lookup works
   _keys.push(k);
-}
-
-function _spreadHooks(n, total) {
-  const used = new Set(), out = [];
-  for (let i = 0; i < n; i++) {
-    let v = Math.min(total - 1, Math.round(i * total / Math.max(n, 1)));
-    while (used.has(v)) v = (v + 1) % total;
-    used.add(v); out.push(v);
-  }
-  return out;
 }
 
 /* ── Internals ────────────────────────────────────────────────── */
