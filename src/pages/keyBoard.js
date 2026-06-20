@@ -201,6 +201,19 @@ function _fobShape(w, h, r, holeY, holeR) {
   return s;
 }
 
+function _shortLabel(name) {
+  let n = name.replace(/\s*\([^)]*\)\s*/g, ' ').trim();   // strip "(Math 125)"
+  if (n.length <= 16) return n;                            // short enough → as-is
+  const numMatch = n.match(/\b(\d+)\b\s*$/);
+  const num = numMatch ? numMatch[1] : '';
+  const skip = new Set(['of', 'the', 'and', 'to', 'in', 'for', 'a', 'an', '&']);
+  const acr = n.replace(/\d+\s*$/, '').trim().split(/\s+/)
+    .filter(w => w && !skip.has(w.toLowerCase()))
+    .map(w => w[0].toUpperCase()).join('');
+  const out = (acr + (num ? ' ' + num : '')).trim();
+  return out.length ? out : n.slice(0, 16);
+}
+
 function _makeLabel(name) {
   const c = document.createElement('canvas'); c.width = 420; c.height = 150;
   const x = c.getContext('2d');
@@ -247,7 +260,7 @@ function _makeKey(cls, hookIndex, metal) {
   eyelet.position.set(0, HOLEY, 0); body.add(eyelet);
 
   const lMat = new THREE.MeshBasicMaterial({
-    map: _makeLabel(cls.name), transparent: true, opacity: 0.95,
+    map: _makeLabel(_shortLabel(cls.name)), transparent: true, opacity: 0.95,
     depthTest: false, depthWrite: false, side: THREE.DoubleSide,
   });
   const lbl = new THREE.Mesh(new THREE.PlaneGeometry(98, 38), lMat);
