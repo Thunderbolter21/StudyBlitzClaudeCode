@@ -78,8 +78,8 @@ const CLASSES=[
   {id:'ac',name:'Accounting 210',color:0xff3f6c,hook:0,decks:[['Accounting Exam 2',45,10],['Chapters 5,6 Review',60,25],['Final Exam',30,2]]},
   {id:'mkt',name:'Marketing 300',color:0xff8c42,hook:2,decks:[['MKT 300 Exam 3',41,20],['Marketing Final',50,10],['General Ch.1-8',40,10]]},
   {id:'macro',name:'Macroeconomics',color:0xb57bee,hook:5,decks:[['Agg. Supply/Demand',38,14],['Final Study Guide',22,3],['ECON Exam 3',33,6]]},
-  {id:'csm',name:'CSM 201',color:0x00e5a0,hook:7,decks:[]},
-  {id:'calc',name:'Calculus 1',color:0x38b2ff,hook:9,decks:[]},
+  {id:'csm',name:'Consumer Science Management 201',color:0x00e5a0,hook:7,decks:[]},
+  {id:'calc',name:'Calculus 1 (Math 125)',color:0x38b2ff,hook:9,decks:[]},
 ];
 const HOOKS=[];const cols=[-300,-100,100,300],rows=[150,0,-150];let hi=0;
 rows.forEach(y=>cols.forEach(x=>HOOKS.push({id:hi++,x,y,z:30})));
@@ -159,53 +159,68 @@ function fobShape(w,h,r,holeY,holeR){
   const hole=new THREE.Path();hole.absarc(0,holeY,holeR,0,Math.PI*2,true);s.holes.push(hole);
   return s;
 }
+function shortLabel(name){
+  // strip parentheticals like "(Math 125)"
+  let n=name.replace(/\s*\([^)]*\)\s*/g,' ').trim();
+  // already short enough? keep as-is
+  if(n.length<=16) return n;
+  // pull a trailing number (e.g. "201", "1")
+  const numMatch=n.match(/\b(\d+)\b\s*$/);
+  const num=numMatch?numMatch[1]:'';
+  // acronym from significant words (skip small filler words)
+  const skip=new Set(['of','the','and','to','in','for','a','an','&']);
+  const acr=n.replace(/\d+\s*$/,'').trim().split(/\s+/)
+    .filter(w=>w && !skip.has(w.toLowerCase()))
+    .map(w=>w[0].toUpperCase()).join('');
+  const out=(acr+(num?' '+num:'')).trim();
+  return out.length?out:n.slice(0,16);
+}
 function makeLabel(name){
-  const c=document.createElement('canvas');c.width=340;c.height=130;const x=c.getContext('2d');
+  const text=shortLabel(name);
+  const c=document.createElement('canvas');c.width=420;c.height=150;const x=c.getContext('2d');
+  x.clearRect(0,0,420,150);
   x.textAlign='center';x.textBaseline='middle';
-  let fs=48;x.font='700 '+fs+'px "Arial Narrow",Arial,sans-serif';
-  while(x.measureText(name).width>300&&fs>22){fs-=2;x.font='700 '+fs+'px "Arial Narrow",Arial,sans-serif';}
-  // engraved look: dark recessed fill + faint top highlight offset for bevel
-  x.fillStyle='rgba(255,255,255,0.10)';x.fillText(name,170,69); // lower-light catch
-  x.fillStyle='rgba(0,0,0,0.62)';x.fillText(name,170,67);       // dark engraved body
-  const t=new THREE.CanvasTexture(c);t.anisotropy=4;return t;
+  let fs=58;const setF=n=>x.font='700 '+n+'px sans-serif';setF(fs);
+  while(x.measureText(text).width>384&&fs>26){fs-=2;setF(fs);}
+  x.fillStyle='rgba(0,0,0,0.55)';x.fillText(text,210,80);      // engrave shadow
+  x.fillStyle='rgba(240,240,250,0.95)';x.fillText(text,210,76);// light face
+  const t=new THREE.CanvasTexture(c);t.anisotropy=8;t.needsUpdate=true;return t;
 }
 
 const pickable=[],keys=[];
 function makeKey(cls){
-  const FW=120,FH=66,DEPTH=16,HOLEY=FH/2-15,HOLER=7;
+  const FW=120,FH=66,DEPTH=16,HOLEY=FH/2-10,HOLER=7;
   const pivot=new THREE.Group();
   const body=new THREE.Group();
   // glass block
   const shape=fobShape(FW,FH,16,HOLEY,HOLER);
   let geo=new THREE.ExtrudeGeometry(shape,{depth:DEPTH,bevelEnabled:true,bevelThickness:3,bevelSize:3,bevelSegments:4,steps:1,curveSegments:20});
   geo.translate(0,0,-DEPTH/2);
-  const glass=new THREE.MeshPhysicalMaterial({color:cls.color,metalness:0,roughness:0.38,
-    clearcoat:1,clearcoatRoughness:0.18,transparent:true,opacity:0.6,envMap:ENV,envMapIntensity:2.2,
-    reflectivity:0.7,emissive:cls.color,emissiveIntensity:0.22,side:THREE.DoubleSide});
-  const block=new THREE.Mesh(geo,glass);block.userData.key=cls;body.add(block);pickable.push(block);
+  // two-material block: dark frosted front/back caps, emissive class-color edges
+  const capMat=new THREE.MeshPhysicalMaterial({color:0x0e0e15,metalness:0,roughness:0.42,
+    clearcoat:1,clearcoatRoughness:0.22,transparent:true,opacity:0.74,envMap:ENV,envMapIntensity:0.7,
+    reflectivity:0.5,side:THREE.DoubleSide});
+  const edgeMat=new THREE.MeshStandardMaterial({color:0x0c0c12,emissive:cls.color,
+    emissiveIntensity:1.0,roughness:0.5,transparent:true,opacity:0.92});
+  const block=new THREE.Mesh(geo,[capMat,edgeMat]);block.userData.key=cls;body.add(block);pickable.push(block);
   // eyelet around the hole (metal, per-key clone so it can fade)
   const eMat=metal.clone();eMat.transparent=true;
   const eyelet=new THREE.Mesh(new THREE.TorusGeometry(HOLER+1.4,1.8,10,24),eMat);
   eyelet.position.set(0,HOLEY,0);body.add(eyelet);
-  // color accent band (left edge, emissive)
-  const bMat=new THREE.MeshPhongMaterial({color:cls.color,emissive:cls.color,emissiveIntensity:1.1,shininess:80,transparent:true});
-  const band=new THREE.Mesh(new THREE.BoxGeometry(3.5,42,DEPTH+2.5),bMat);
-  band.position.set(-FW/2+8,-6,0);body.add(band);band.userData.key=cls;pickable.push(band);
-  // label
-  const lMat=new THREE.MeshBasicMaterial({map:makeLabel(cls.name),transparent:true,opacity:0.9,depthWrite:false});
-  const lbl=new THREE.Mesh(new THREE.PlaneGeometry(98,38),lMat);
-  lbl.position.set(4,-6,DEPTH/2-1.2);body.add(lbl);lbl.userData.key=cls;pickable.push(lbl);
+  // engraved label — forced on top so the glass can't occlude it
+  const lMat=new THREE.MeshBasicMaterial({map:makeLabel(cls.name),transparent:true,opacity:0.95,
+    depthTest:false,depthWrite:false,side:THREE.DoubleSide});
+  const lbl=new THREE.Mesh(new THREE.PlaneGeometry(104,37),lMat);
+  lbl.renderOrder=999;
+  lbl.position.set(2,-8,DEPTH/2+1.5);body.add(lbl);lbl.userData.key=cls;pickable.push(lbl);
 
-  // hang so the hole sits at the pivot
-  body.position.y=-(FH/2-HOLEY); // moves hole to pivot height... fob center below
-  body.position.y=-(HOLEY+ (FH/2-HOLEY)); // = -FH/2 ... place center so hole(top) at pivot
-  // simpler: hole local y = HOLEY (from center). want hole at pivot(0). so center at -HOLEY:
+  // hang so the punched hole sits exactly at the pivot (hook tip)
   body.position.y=-HOLEY;
   pivot.add(body);
   const h=HOOKS[cls.hook];pivot.position.set(h.x,h.y,h.z);
   scene.add(pivot);
 
-  const mats=[{m:glass,b:0.62},{m:eMat,b:1},{m:bMat,b:1},{m:lMat,b:1}];
+  const mats=[{m:capMat,b:0.74},{m:edgeMat,b:0.92},{m:eMat,b:1},{m:lMat,b:0.95}];
   const k={cls,pivot,body,ang:0,vel:0,mode:'hung',vis:1,
     pt:new THREE.Vector3(h.x,h.y,h.z),pp:new THREE.Vector3(h.x,h.y,h.z),
     phase:Math.random()*6.28,mats};
