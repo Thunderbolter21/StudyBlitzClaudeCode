@@ -90,6 +90,9 @@ export async function signOut() {
 async function handlePostAuth(session, type) {
   setSupaUser(session.user);
   updateAuthUI();
+  // Leave the logged-out landing (if mounted) → triggers destroyHero via the
+  // nav lifecycle, releasing BOTH hero WebGL contexts before any sync work.
+  window.nav?.('dashboard');
 
   const localDecks = (lsLoad(KEYS.decks) || []).filter(d => d.id !== 'builtin-mkt300');
   if (localDecks.length > 0) {

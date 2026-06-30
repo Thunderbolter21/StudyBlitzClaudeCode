@@ -682,3 +682,114 @@ select:disabled{opacity:0.4;cursor:not-allowed;}
   #kb-panel{transition:none;}
   #kb-panel.show .kb-dcard{animation:none;opacity:1;transform:none;}
 }
+
+/* ════════════ HERO LANDING — logged-out marketing hero ════════════ */
+/* PHASE 2: full visual port of prototype_hero.html — headline column + 3D
+   stage (Spline robot behind, Three.js glass key in front) + hover-expand
+   features + SM-2 band. STATIC: gentle idle key-sway only; the unhook +
+   waterfall choreography and the 200vh sticky scroll stage land in Phase 3.
+   Everything is scoped to #page-landing / .hero-* so the signed-in app is
+   untouched, and #page-landing drops the default .page padding. */
+#page-landing{padding:0;}
+
+/* Connective grid + red radial glow — the prototype's backdrop, scoped to the
+   landing (fixed, but hidden whenever #page-landing is not the active page). */
+.hero-wrap{position:relative;z-index:1;}
+.hero-wrap::before,.hero-wrap::after{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;}
+.hero-wrap::before{background-image:linear-gradient(rgba(255,255,255,0.028) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(255,255,255,0.028) 1px,transparent 1px);background-size:42px 42px;}
+.hero-wrap::after{background:radial-gradient(70% 60% at 72% 4%,rgba(255,63,108,0.16),transparent 70%);}
+
+/* hero — 200vh scroll stage: both columns pin (sticky) below the 56px topbar
+   while the section scrolls past, driving the unhook + waterfall choreography. */
+.hero{position:relative;z-index:1;display:flex;align-items:flex-start;height:200vh;}
+.hero-left{width:42%;flex:0 0 42%;padding:0 0 0 clamp(24px,5vw,56px);z-index:3;
+  position:sticky;top:56px;height:calc(100vh - 56px);
+  display:flex;flex-direction:column;justify-content:center;}
+.hero-eyebrow{font-family:ui-monospace,monospace;font-size:0.72rem;letter-spacing:0.15em;
+  color:var(--accent);text-transform:uppercase;margin-bottom:18px;}
+.hero-h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(3rem,6vw,5.2rem);line-height:0.92;
+  letter-spacing:0.02em;color:var(--text);}
+.hero-h1 .glow{color:var(--accent);text-shadow:0 0 30px rgba(255,63,108,0.5);}
+.hero-hand{font-family:'Caveat',cursive;font-size:1.7rem;color:var(--accent);margin:6px 0 0 4px;}
+.hero-sub{font-size:1.05rem;color:var(--muted);line-height:1.6;margin:22px 0 30px;max-width:440px;}
+.hero-cta{font-size:1rem;padding:14px 32px;align-self:flex-start;}
+
+/* stage — holds the fallback (z0), Spline robot (z1), Three.js key canvas (z3),
+   waterfall decks (z4), guide-sign (z5). Sticky-pinned alongside .hero-left. */
+.hero-stage{position:sticky;top:56px;width:58%;flex:1 1 58%;height:calc(100vh - 56px);
+  z-index:2;overflow:hidden;}
+.hero-spline{position:absolute;inset:0;width:100%;height:100%;z-index:1;border:none;}
+.hero-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none;}
+
+/* waterfall decks — positioned per-frame from the key's projected position */
+.hero-decks{position:absolute;inset:0;z-index:4;pointer-events:none;}
+.hero-ddeck{position:absolute;left:0;top:0;width:200px;transform-origin:top left;
+  background:rgba(20,20,28,0.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:11px;padding:11px 13px;
+  opacity:0;will-change:transform,opacity;pointer-events:auto;cursor:pointer;
+  transition:border-color .15s,box-shadow .15s;}
+.hero-ddeck:hover{border-color:var(--accent);box-shadow:0 0 22px -6px rgba(255,63,108,0.6);}
+.hero-ddeck .t{font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:0.04em;color:var(--text);}
+.hero-ddeck .s{font-size:0.62rem;color:var(--muted);font-family:ui-monospace,monospace;margin-top:2px;}
+
+/* guide-sign — OUR overlay near the robot; prominent + loud, fades as it opens */
+.hero-guide{position:absolute;bottom:9%;left:50%;transform:translateX(-50%);z-index:5;
+  font-family:'Sora',sans-serif;font-weight:700;font-size:1.15rem;color:#fff;white-space:nowrap;
+  border:2px solid var(--accent);border-radius:999px;padding:14px 30px;
+  background:rgba(255,63,108,0.18);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  box-shadow:0 0 36px -2px rgba(255,63,108,0.7);
+  transition:opacity .3s;animation:hero-guidebob 1.8s ease-in-out infinite;}
+@keyframes hero-guidebob{0%,100%{transform:translateX(-50%) translateY(0);}50%{transform:translateX(-50%) translateY(7px);}}
+/* Graceful placeholder behind both WebGL layers — visible until the Spline
+   robot paints (.loaded fades it out) or if the scene can't load (.failed). */
+.hero-fallback{position:absolute;inset:0;z-index:0;display:flex;align-items:center;justify-content:center;
+  gap:10px;color:rgba(255,255,255,0.16);font-family:ui-monospace,monospace;font-size:0.78rem;
+  letter-spacing:0.08em;transition:opacity .6s ease;}
+.hero-fallback-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);opacity:0.55;
+  animation:hero-fallback-pulse 1.6s ease-in-out infinite;}
+.hero-fallback.loaded{opacity:0;}
+@keyframes hero-fallback-pulse{0%,100%{opacity:0.2;}50%{opacity:0.7;}}
+
+/* features — hover to expand the description left→right */
+.hero-features{position:relative;z-index:1;max-width:920px;margin:0 auto;padding:80px 30px 60px;}
+.hero-features h2{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;letter-spacing:0.06em;
+  text-align:center;margin-bottom:8px;color:var(--text);}
+.hero-fsub{text-align:center;color:var(--muted);margin-bottom:48px;}
+.hero-frow{display:flex;align-items:center;gap:0;border-bottom:1px solid var(--border);padding:24px 6px;}
+.hero-frow .ic{font-size:1.5rem;width:42px;flex:0 0 auto;}
+.hero-frow .fw{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:0.04em;
+  flex:0 0 auto;white-space:nowrap;transition:color .3s;color:var(--text);}
+.hero-frow .fline{overflow:hidden;max-width:0;opacity:0;white-space:nowrap;color:var(--muted);
+  font-size:0.95rem;padding-left:0;
+  transition:max-width .55s cubic-bezier(.22,1,.36,1),opacity .4s,padding-left .4s;}
+.hero-frow:hover .fw{color:var(--accent);}
+.hero-frow:hover .fline{max-width:560px;opacity:1;padding-left:22px;}
+
+/* SM-2 connective band */
+.hero-smband{position:relative;z-index:1;max-width:920px;margin:30px auto 120px;padding:0 30px;}
+.hero-smcard{background:linear-gradient(135deg,rgba(255,63,108,0.10),rgba(255,63,108,0.02));
+  border:1px solid rgba(255,63,108,0.22);border-radius:22px;padding:38px 40px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.06),0 0 50px -20px rgba(255,63,108,0.5);}
+.hero-smcard .tag{font-family:ui-monospace,monospace;font-size:0.7rem;letter-spacing:0.15em;
+  color:var(--accent);text-transform:uppercase;margin-bottom:14px;}
+.hero-smcard h3{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:0.04em;
+  margin-bottom:14px;color:var(--text);}
+.hero-smcard p{color:rgba(255,255,255,0.7);font-size:1rem;line-height:1.65;max-width:680px;}
+.hero-smcard p b{color:#fff;font-weight:600;}
+
+/* mobile — same choreography (not a separate version), stacked + perf-capped.
+   Headline scrolls in above; the stage still PINS (sticky) so the unhook +
+   waterfall play in view, just full-width and with capped pixelRatio/env. */
+@media(max-width:900px){
+  .hero{flex-direction:column;align-items:center;text-align:center;height:200vh;}
+  .hero-left{width:100%;flex:0 0 auto;padding:60px 24px 0;position:relative;height:auto;
+    justify-content:flex-start;}
+  .hero-sub{margin-left:auto;margin-right:auto;}
+  .hero-cta{align-self:center;}
+  .hero-stage{width:100%;flex:0 0 auto;position:sticky;top:56px;height:calc(100vh - 56px);}
+  .hero-features h2{font-size:2rem;}
+  .hero-frow .fline{font-size:0.8rem;}
+  .hero-frow:hover .fline{max-width:60vw;white-space:normal;}
+}
+@media(prefers-reduced-motion:reduce){.hero-fallback-dot{animation:none;}}

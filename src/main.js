@@ -9,6 +9,7 @@ import { nav, openNav, closeNav, initNavCallbacks, initNavListeners, ROUTES, _ro
 import { initDeckCardCallbacks } from './components/DeckCard.js';
 import { initFab, initFabUI } from './components/Fab.js';
 import { initKeyBoard, destroyKeyBoard, initKeyBoardCallbacks } from './pages/keyBoard.js';
+import { initHero, destroyHero, initHeroCallbacks } from './pages/hero.js';
 import { toggleDeckMenu, openAssignClassModal, openCreateClassModal, openClassMenu, initModalCallbacks, openGuestSignupModal, closeGuestSignupModal } from './components/Modals.js';
 import { initDeckCallbacks, getDecks, getDeckById, deleteDeck, initBuiltins } from './engine/decks.js';
 import { initAuth, syncOnBoot, scheduleSync, openAuthModal, updateAuthStatus, initAuthCallbacks, isLoggedIn } from './engine/auth.js';
@@ -69,7 +70,8 @@ function wireCallbacks() {
   initDeckCallbacks(toast, refreshAll);
   initModalCallbacks({ toast, refreshAll, deleteDeck });
   initKeyBoardCallbacks({ openClassQuizPanel, nav, toggleDeckMenu });
-  initNavCallbacks({ refreshDashboard, refreshClasses, refreshQuizSelect, refreshSavedTests, refreshWeakSpots, openClassQuizPanel, initKeyBoard, destroyKeyBoard });
+  initHeroCallbacks({ nav, openAuthModal });
+  initNavCallbacks({ refreshDashboard, refreshClasses, refreshQuizSelect, refreshSavedTests, refreshWeakSpots, openClassQuizPanel, initKeyBoard, destroyKeyBoard, initHero, destroyHero, isLoggedIn });
   initDeckCardCallbacks({ quickStartDeck, drillDeck, toggleDeckMenu, openAssignClassModal });
   initQuizCallbacks({ toast, refreshAll, nav, refreshDashboard, refreshQuizSelect, refreshWeakSpots });
   initDashboardCallbacks({ nav });
@@ -201,8 +203,10 @@ function handleHashChange() {
 function handleInitialHash() {
   const hash = window.location.hash.slice(1);
   if (!hash) {
-    // Set canonical hash for dashboard without adding a history entry
-    history.replaceState(null, '', '#dashboard');
+    // Logged-out visitors land on the 3D hero; signed-in users get the dashboard
+    // (already the default .active page). _applyNav also normalizes either way.
+    if (!isLoggedIn()) { nav('landing'); }
+    else history.replaceState(null, '', '#dashboard');
     return;
   }
   const [route, queryStr] = hash.split('?');

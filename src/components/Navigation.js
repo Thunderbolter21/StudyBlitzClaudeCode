@@ -3,10 +3,11 @@
 import { getClasses } from '../engine/classes.js';
 import { getDecks, getDeckColor } from '../engine/decks.js';
 
-let _refreshDashboard, _refreshClasses, _refreshQuizSelect, _refreshSavedTests, _refreshWeakSpots, _openClassQuizPanel, _initKeyBoard, _destroyKeyBoard;
+let _refreshDashboard, _refreshClasses, _refreshQuizSelect, _refreshSavedTests, _refreshWeakSpots, _openClassQuizPanel, _initKeyBoard, _destroyKeyBoard, _initHero, _destroyHero, _isLoggedIn;
 
 // Hash route names → nav() page keys
 export const ROUTES = {
+  'landing':      'landing',
   'dashboard':    'dashboard',
   'classes':      'classes',
   'quiz':         'quiz-select',
@@ -17,6 +18,7 @@ export const ROUTES = {
 
 // nav() page key → hash route name
 const PAGE_TO_ROUTE = {
+  'landing':     'landing',
   'dashboard':   'dashboard',
   'classes':     'classes',
   'quiz-select': 'quiz',
@@ -28,7 +30,7 @@ const PAGE_TO_ROUTE = {
 // Shared object so main.js can read the flag by reference
 export const _routing = { navInProgress: false };
 
-export function initNavCallbacks({ refreshDashboard, refreshClasses, refreshQuizSelect, refreshSavedTests, refreshWeakSpots, openClassQuizPanel, initKeyBoard, destroyKeyBoard }) {
+export function initNavCallbacks({ refreshDashboard, refreshClasses, refreshQuizSelect, refreshSavedTests, refreshWeakSpots, openClassQuizPanel, initKeyBoard, destroyKeyBoard, initHero, destroyHero, isLoggedIn }) {
   _refreshDashboard = refreshDashboard;
   _refreshClasses = refreshClasses;
   _refreshQuizSelect = refreshQuizSelect;
@@ -37,6 +39,9 @@ export function initNavCallbacks({ refreshDashboard, refreshClasses, refreshQuiz
   _openClassQuizPanel = openClassQuizPanel;
   _initKeyBoard = initKeyBoard;
   _destroyKeyBoard = destroyKeyBoard;
+  _initHero = initHero;
+  _destroyHero = destroyHero;
+  _isLoggedIn = isLoggedIn;
 }
 
 function _prefersReducedMotion() {
@@ -45,6 +50,16 @@ function _prefersReducedMotion() {
 
 // The actual page swap + routing. Logic is unchanged from the original nav().
 function _applyNav(page) {
+  // Auth normalization — the hero landing is the logged-out home; the dashboard
+  // is signed-in only. This one rule covers logo click, sign-out, hashchange and
+  // boot, and guarantees neither hero WebGL context is created for a signed-in user.
+  if (page === 'landing'   && _isLoggedIn?.() === true)  page = 'dashboard';
+  if (page === 'dashboard' && _isLoggedIn?.() === false) page = 'landing';
+
+  // Tear down the logged-out 3D hero when navigating away from #landing.
+  if (page !== 'landing' && document.getElementById('page-landing')?.classList.contains('active')) {
+    _destroyHero?.();
+  }
   // Tear down the 3D Classes board when navigating away from #classes.
   if (page !== 'classes' && document.getElementById('page-classes')?.classList.contains('active')) {
     _destroyKeyBoard?.();
@@ -67,6 +82,8 @@ function _applyNav(page) {
   if (page === 'weak-spots') _refreshWeakSpots?.();
   // Mount the 3D Classes board when entering #classes (idempotent).
   if (page === 'classes') _initKeyBoard?.(document.getElementById('page-classes'));
+  // Mount the logged-out 3D hero when entering #landing (idempotent).
+  if (page === 'landing') _initHero?.(document.getElementById('page-landing'));
 
   // Update URL hash — flag prevents the hashchange listener from re-firing
   const route = PAGE_TO_ROUTE[page] || page;
